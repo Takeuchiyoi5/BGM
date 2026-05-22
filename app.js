@@ -1,6 +1,7 @@
 /* ==========================================================================
   【ファイル役割】
-  タイピングゲームの進行、タイマー、およびカテゴリごとのBGM切り替えを完全に制御します。
+  タイピングゲームの進行、タイマー、およびカテゴリごとのBGM切り替えを制御します。
+  ★日本語読み上げ時に「（〜の形）」などの補足説明を自動でカットする機能を追加しました。
   ==========================================================================
 */
 
@@ -72,18 +73,17 @@ function getTrackForCategory(category) {
     if (category === 'verbs' || category === 'verbs3') return bgTracks.verbs;
     if (category === 'adj' || category === 'adj3') return bgTracks.adj;
     if (category === 'noun' || category === 'noun3') return bgTracks.noun;
-    return bgTracks.idiom; // prep, custom, revenge, idiom3 はすべてこれ
+    return bgTracks.idiom; 
 }
 
-// 🎵 滑らかなクロスフェード（確実に前の曲を消し、新しい曲を再生）
+// 🎵 滑らかなクロスフェード
 function fadeTransitionTo(newTrack) {
     if (!newTrack) return;
     const targetVol = parseFloat(volumeSlider.value);
-    const fadeDuration = 1000; // 1秒でクロスフェード
+    const fadeDuration = 1000; 
     const steps = 10;
     const interval = fadeDuration / steps;
 
-    // 現在流れている曲があり、それが新しい曲と違う場合はフェードアウト
     if (currentAudioEl && currentAudioEl !== newTrack) {
         let oldTrack = currentAudioEl;
         let outStep = 0;
@@ -99,16 +99,13 @@ function fadeTransitionTo(newTrack) {
         }, interval);
     }
 
-    // 新しい曲を現在のトラックに指定
     currentAudioEl = newTrack;
     
-    // ゲームプレイ中の場合のみ音量をゼロからフェードインさせて再生
     if (isPlaying) {
         currentAudioEl.volume = 0;
-        // 途中で切り替わった場合も考慮し、既に対象の曲が流れていなければ最初から再生
         if (currentAudioEl.paused) {
             currentAudioEl.currentTime = 0;
-            currentAudioEl.play().catch(e => console.log("BGM再生がブラウザにブロックされました（キー操作で解除されます）"));
+            currentAudioEl.play().catch(e => console.log("BGM再生がブロックされました"));
         }
 
         let inStep = 0;
@@ -125,7 +122,7 @@ function fadeTransitionTo(newTrack) {
     }
 }
 
-// 🔄 「全て」モード専用：120秒ごとに5曲を自動でスイッチするループ
+// 🔄 「全て」モード専用：120秒ごとに自動スイッチ
 function startAllModeBgmCycle() {
     if (allModeTimerId) clearInterval(allModeTimerId);
     allModeTrackIndex = 0;
@@ -150,11 +147,9 @@ function stopAllBgm() {
     currentAudioEl = null;
 }
 
-// 音量スライダー変更時のリアルタイム反映
 volumeSlider.addEventListener('input', () => {
     if (currentAudioEl) currentAudioEl.volume = parseFloat(volumeSlider.value);
 });
-// --- 🎵 BGMシステムここまで ---
 
 function initAudioContext() {
     if (!audioCtx) {
@@ -252,7 +247,6 @@ function applyFilterAndShuffle() {
     }
 }
 
-// 🌟 カテゴリメニューボタンが押された時の処理（再生中なら即座にBGMを切り替える）
 function switchCategory(categoryTag, element) {
     document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
     element.classList.add('active');
@@ -270,15 +264,13 @@ function switchCategory(categoryTag, element) {
         meaningDisplay.innerText = `Loaded ${currentPlaylist.length} items`;
     }
 
-    // 🌟 プレイ中にカテゴリボタンが押された場合、即座に対応するBGMへ変更
     if (isPlaying) {
         if (activeCategory === 'all') {
             startAllModeBgmCycle();
         } else {
-            if (allModeTimerId) clearInterval(allModeTimerId); // ALLモードのタイマーを解除
+            if (allModeTimerId) clearInterval(allModeTimerId);
             fadeTransitionTo(getTrackForCategory(activeCategory));
         }
-        // 音声読み上げやテンポラリタイマーをリセットして次のステップへ
         resetBeatTimer();
         processChantStep();
     }
@@ -398,7 +390,6 @@ function startLoop() {
     actionBtn.innerText = "STOP GAME";
     actionBtn.classList.add('playing');
     
-    // 🌟 ゲーム開始時のBGM選定と再生開始
     if (activeCategory === 'all') {
         startAllModeBgmCycle();
     } else {
@@ -411,7 +402,7 @@ function startLoop() {
     scoreVal.innerText = gameScore;
     comboVal.innerText = gameCombo;
     
-    window.removeEventListener('keydown', handleTypingInput); // 重複防止
+    window.removeEventListener('keydown', handleTypingInput); 
     window.addEventListener('keydown', handleTypingInput);
     
     startCountdown(); 
@@ -514,7 +505,9 @@ function processChantStep() {
             break;
         case 1: 
             meaningDisplay.innerText = currentVocab.meaning;
-            speak(currentVocab.meaning, 'ja-JP');
+            // 🌟 【変更点】読み上げ用テキストからカッコとその中身（例: 「（sが付く形）」）を除去
+            let cleanJapanese = currentVocab.meaning.replace(/（[^）]*）/g, '').replace(/\([^)]*\)/g, '').trim();
+            speak(cleanJapanese, 'ja-JP');
             step = 2;
             break;
         case 2: 
