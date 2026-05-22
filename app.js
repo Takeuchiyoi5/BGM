@@ -1,8 +1,7 @@
 /* ==========================================================================
   【ファイル役割】
   タイピングゲームの進行、タイマー、およびカテゴリごとのBGM切り替えを制御します。
-  ★日本語のカッコ完全カットに加え、「read」の過去形データ（カッコ書き等が含まれていても）
-    を確実に「red（レッド）」として正しくネイティブ発音させるようにロジックを強化しました。
+  ★「来る」を「きたる」と誤読してしまうバグを完全に修正しました。
   ==========================================================================
 */
 
@@ -14,7 +13,8 @@ let currentPlaylist = [];
 let revengeDb = []; 
 
 let isPlaying = false;
-let isShuffleOn = false;
+let isPaused = false; 
+let isShuffleOn = false; 
 let timerId = null;
 let wordIndex = 0;
 let step = 0; 
@@ -29,36 +29,22 @@ let hasError = false;
 
 let countdownTimerId = null;
 let totalSecondsLeft = 0;
+let isInfiniteTime = false; 
 
 let audioCtx = null;
 
-// --- 🎵 BGMシステム：5つのゲーム（カテゴリ）ごとの選曲マップ ---
+// --- 🎵 BGMシステム ---
 let currentAudioEl = null;
 let allModeTrackIndex = 0;
 let allModeTimerId = null;
 
-// HTML側の<audio>要素を取得
-const bgTracks = {
-    how: document.getElementById('bg-track-how'),     // How特訓：キラキラアイドル.mp3
-    verbs: document.getElementById('bg-track-verbs'), // 4級/3級動詞：Pop_swing.mp3
-    adj: document.getElementById('bg-track-adj'),     // 4級/3級形容詞：Snack_time.mp3
-    noun: document.getElementById('bg-track-noun'),   // 4級/3級名詞：かわいいきみ。.mp3
-    idiom: document.getElementById('bg-track-idiom')  // 3級熟語・その他すべて：わた雲を食べて.mp3
-};
-
-// 全て（ALL）モードの時のローテーション順序
-const allModePlaylist = [
-    bgTracks.how, 
-    bgTracks.verbs, 
-    bgTracks.adj, 
-    bgTracks.noun, 
-    bgTracks.idiom
-];
+let bgTracks = {};
 
 const volumeSlider = document.getElementById('volume');
 const wordDisplay = document.getElementById('word-display');
 const meaningDisplay = document.getElementById('meaning-display');
 const actionBtn = document.getElementById('action-btn');
+const stopBtn = document.getElementById('stop-btn'); 
 const shuffleBtn = document.getElementById('shuffle-btn');
 const scoreVal = document.getElementById('score-val');
 const comboVal = document.getElementById('combo-val');
@@ -68,7 +54,25 @@ const timeLeftDisplay = document.getElementById('time-left-display');
 const durationSelect = document.getElementById('game-duration-select');
 const revengeTabBtn = document.getElementById('revenge-tab-btn');
 
-// カテゴリ名から流すべきBGM要素を1対1で特定する関数
+let allModePlaylist = [];
+
+function initBgmTracks() {
+    bgTracks = {
+        how: document.getElementById('bg-track-how'),     
+        verbs: document.getElementById('bg-track-verbs'), 
+        adj: document.getElementById('bg-track-adj'),     
+        noun: document.getElementById('bg-track-noun'),   
+        idiom: document.getElementById('bg-track-idiom')  
+    };
+    allModePlaylist = [
+        bgTracks.how, 
+        bgTracks.verbs, 
+        bgTracks.adj, 
+        bgTracks.noun, 
+        bgTracks.idiom
+    ].filter(el => el !== null);
+}
+
 function getTrackForCategory(category) {
     if (category === 'how') return bgTracks.how;
     if (category === 'verbs' || category === 'verbs3') return bgTracks.verbs;
@@ -77,10 +81,9 @@ function getTrackForCategory(category) {
     return bgTracks.idiom; 
 }
 
-// 🎵 滑らかなクロスフェード
 function fadeTransitionTo(newTrack) {
     if (!newTrack) return;
-    const targetVol = parseFloat(volumeSlider.value);
+    const targetVol = volumeSlider ? parseFloat(volumeSlider.value) : 0.2;
     const fadeDuration = 1000; 
     const steps = 10;
     const interval = fadeDuration / steps;
@@ -102,7 +105,7 @@ function fadeTransitionTo(newTrack) {
 
     currentAudioEl = newTrack;
     
-    if (isPlaying) {
+    if (isPlaying && !isPaused) {
         currentAudioEl.volume = 0;
         if (currentAudioEl.paused) {
             currentAudioEl.currentTime = 0;
@@ -123,14 +126,14 @@ function fadeTransitionTo(newTrack) {
     }
 }
 
-// 🔄 「全て」モード専用：120秒ごとに自動スイッチ
 function startAllModeBgmCycle() {
     if (allModeTimerId) clearInterval(allModeTimerId);
+    if (allModePlaylist.length === 0) return;
     allModeTrackIndex = 0;
     fadeTransitionTo(allModePlaylist[allModeTrackIndex]);
 
     allModeTimerId = setInterval(() => {
-        if (!isPlaying) return;
+        if (!isPlaying || isPaused) return;
         allModeTrackIndex = (allModeTrackIndex + 1) % allModePlaylist.length;
         fadeTransitionTo(allModePlaylist[allModeTrackIndex]);
     }, 120000);
@@ -148,9 +151,11 @@ function stopAllBgm() {
     currentAudioEl = null;
 }
 
-volumeSlider.addEventListener('input', () => {
-    if (currentAudioEl) currentAudioEl.volume = parseFloat(volumeSlider.value);
-});
+if (volumeSlider) {
+    volumeSlider.addEventListener('input', () => {
+        if (currentAudioEl) currentAudioEl.volume = parseFloat(volumeSlider.value);
+    });
+}
 
 function initAudioContext() {
     if (!audioCtx) {
@@ -159,7 +164,7 @@ function initAudioContext() {
 }
 
 function playKeySuccessSound() {
-    if (!audioCtx) return;
+    if (!audioCtx || isPaused) return;
     let osc = audioCtx.createOscillator();
     let gain = audioCtx.createGain();
     osc.connect(gain);
@@ -173,7 +178,7 @@ function playKeySuccessSound() {
 }
 
 function playWordCompleteSound() {
-    if (!audioCtx) return;
+    if (!audioCtx || isPaused) return;
     let now = audioCtx.currentTime;
     const tones = [523.25, 659.25, 783.99, 1046.50]; 
     tones.forEach((freq, idx) => {
@@ -216,14 +221,31 @@ function loadSavedData() {
     masterVocabDb = typeof baseVocabDb !== 'undefined' ? [...baseVocabDb, ...customWords] : [...customWords];
 }
 
+function setupDurationSelect() {
+    if (!durationSelect) return;
+    durationSelect.innerHTML = "";
+    const optionsData = [
+        { value: "5", text: "⏱️ 5分" },
+        { value: "10", text: "⏱️ 10分" },
+        { value: "15", text: "⏱️ 15分" },
+        { value: "infinite", text: "∞ 無制限" }
+    ];
+    optionsData.forEach(opt => {
+        const element = document.createElement('option');
+        element.value = opt.value;
+        element.innerText = opt.text;
+        if(opt.value === "15") element.selected = true;
+        durationSelect.appendChild(element);
+    });
+}
+
 function saveProgress() {
     localStorage.setItem('eiken4_masteredIds', JSON.stringify(masteredIds));
 }
 
 function resetLocalStorage() {
-    if(confirm("【警告】保存されたすべての進捗をリセットしますか？")) {
+    if(confirm("【確認】これまでに「覚えた！」で隠した単語をすべて復活させますか？（※自分で追加したカスタム単語は消えずに残ります）")) {
         localStorage.removeItem('eiken4_masteredIds');
-        localStorage.removeItem('eiken4_customWords');
         location.reload();
     }
 }
@@ -249,54 +271,42 @@ function applyFilterAndShuffle() {
 }
 
 function switchCategory(categoryTag, element) {
+    if (isPlaying) return; 
+
     document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
-    element.classList.add('active');
+    if(element) element.classList.add('active');
     activeCategory = categoryTag;
     
     applyFilterAndShuffle();
     wordIndex = 0;
     step = 0;
     
-    if(categoryTag === 'revenge') {
-        wordDisplay.innerHTML = "🎯 REVENGE!";
-        meaningDisplay.innerText = `にがてな単語が ${currentPlaylist.length} 問たまっているよ！`;
-    } else {
-        wordDisplay.innerHTML = "Ready?";
-        meaningDisplay.innerText = `Loaded ${currentPlaylist.length} items`;
-    }
-
-    if (isPlaying) {
-        if (activeCategory === 'all') {
-            startAllModeBgmCycle();
+    if(wordDisplay && meaningDisplay) {
+        if(categoryTag === 'revenge') {
+            wordDisplay.innerHTML = "🎯 REVENGE!";
+            meaningDisplay.innerText = `にがてな単語が ${currentPlaylist.length} 問たまっているよ！`;
         } else {
-            if (allModeTimerId) clearInterval(allModeTimerId);
-            fadeTransitionTo(getTrackForCategory(activeCategory));
+            wordDisplay.innerHTML = "Ready?";
+            meaningDisplay.innerText = `Loaded ${currentPlaylist.length} items`;
         }
-        resetBeatTimer();
-        processChantStep();
     }
 }
 
 function toggleShuffle() {
     isShuffleOn = !isShuffleOn;
-    shuffleBtn.innerText = isShuffleOn ? "🔀 シャッフル：ON" : "🔀 シャッフル：OFF";
-    shuffleBtn.classList.toggle('active', isShuffleOn);
-    
-    applyFilterAndShuffle();
-    wordIndex = 0;
-    step = 0;
-    if (isPlaying) {
-        resetBeatTimer();
-        processChantStep();
+    if (shuffleBtn) {
+        shuffleBtn.innerText = isShuffleOn ? "🔀 シャッフル：ON" : "🔀 シャッフル：OFF";
+        shuffleBtn.classList.toggle('active', isShuffleOn);
     }
+    applyFilterAndShuffle();
 }
 
 function markAsMastered() {
-    if (currentPlaylist.length === 0) return;
+    if (currentPlaylist.length === 0 || !isPlaying || isPaused) return;
     const currentItem = currentPlaylist[wordIndex];
     
     revengeDb = revengeDb.filter(item => item.id !== currentItem.id);
-    if(revengeDb.length === 0) revengeTabBtn.style.display = 'none';
+    if(revengeDb.length === 0 && revengeTabBtn) revengeTabBtn.style.display = 'none';
 
     masteredIds.push(currentItem.id); 
     saveProgress(); 
@@ -305,7 +315,7 @@ function markAsMastered() {
     applyFilterAndShuffle();
     wordIndex = 0;
     step = 0;
-    wordDisplay.innerHTML = "Saved!";
+    if (wordDisplay) wordDisplay.innerHTML = "Saved!";
     if (isPlaying && currentPlaylist.length > 0) {
         resetBeatTimer();
         processChantStep();
@@ -315,7 +325,7 @@ function markAsMastered() {
 function addCustomWord() {
     const wordInput = document.getElementById('custom-word');
     const wordMeaningInput = document.getElementById('custom-meaning');
-    if (!wordInput.value.trim() || !wordMeaningInput.value.trim()) return;
+    if (!wordInput || !wordMeaningInput || !wordInput.value.trim() || !wordMeaningInput.value.trim()) return;
 
     const newEntry = {
         id: Date.now(), 
@@ -336,19 +346,37 @@ function addCustomWord() {
 }
 
 function toggleApp() {
-    if (isPlaying) { stopLoop(); } else { startLoop(); }
+    if (!isPlaying) {
+        startLoop();
+    } else {
+        if (!isPaused) {
+            pauseLoop();
+        } else {
+            resumeLoop();
+        }
+    }
 }
 
 function startCountdown() {
-    timerSetupPanel.style.display = 'none'; 
-    timeLeftDisplay.style.display = 'block'; 
+    if (timerSetupPanel) timerSetupPanel.style.display = 'none'; 
+    if (timeLeftDisplay) timeLeftDisplay.style.display = 'block'; 
     
-    let minutes = parseInt(durationSelect.value);
-    totalSecondsLeft = minutes * 60;
+    if (durationSelect && durationSelect.value === 'infinite') {
+        isInfiniteTime = true;
+        if (timeLeftDisplay) timeLeftDisplay.innerText = `⏱️ 残り時間: ∞ 無制限`;
+        return;
+    }
+    
+    isInfiniteTime = false;
+    if (!isPaused && durationSelect) {
+        let minutes = parseInt(durationSelect.value);
+        totalSecondsLeft = minutes * 60;
+    }
     updateTimerText();
 
     if (countdownTimerId) clearInterval(countdownTimerId);
     countdownTimerId = setInterval(() => {
+        if (isPaused) return; 
         totalSecondsLeft--;
         updateTimerText();
 
@@ -360,6 +388,7 @@ function startCountdown() {
 }
 
 function updateTimerText() {
+    if (isInfiniteTime || !timeLeftDisplay) return;
     let m = Math.floor(totalSecondsLeft / 60);
     let s = totalSecondsLeft % 60;
     timeLeftDisplay.innerText = `⏱️ 残り時間: ${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
@@ -367,29 +396,32 @@ function updateTimerText() {
 
 function endGameByTimeout() {
     stopLoop();
-    timerSetupPanel.style.display = 'flex';
-    timeLeftDisplay.style.display = 'none';
-
-    wordDisplay.innerHTML = "<span style='color:var(--accent); font-size:2rem;'>Time Up! タイムアップ！</span>";
-    meaningDisplay.innerText = `今日のれんしゅう終了！よくがんばったね💖 (Score: ${gameScore})`;
+    if (wordDisplay) wordDisplay.innerHTML = "<span style='color:var(--accent); font-size:2rem;'>Time Up! タイムアップ！</span>";
+    if (meaningDisplay) meaningDisplay.innerText = `今日のれんしゅう終了！よくがんばったね💖 (Score: ${gameScore})`;
     
     if (revengeDb.length > 0) {
         alert(`にがてな単語が ${revengeDb.length} 問たまっているよ！「リベンジモード」ボタンを押して再挑戦してみてね！`);
-        revengeTabBtn.style.display = 'block'; 
+        if (revengeTabBtn) revengeTabBtn.style.display = 'block'; 
     } else {
         alert("全問大正解！すごいや！");
     }
 }
 
 function startLoop() {
+    applyFilterAndShuffle();
     if (currentPlaylist.length === 0) {
         alert("カードがありません！");
         return;
     }
     initAudioContext(); 
     isPlaying = true;
-    actionBtn.innerText = "STOP GAME";
-    actionBtn.classList.add('playing');
+    isPaused = false;
+    
+    if (actionBtn) {
+        actionBtn.innerText = "PAUSE GAME";
+        actionBtn.classList.add('playing');
+    }
+    if (stopBtn) stopBtn.style.display = "block"; 
     
     if (activeCategory === 'all') {
         startAllModeBgmCycle();
@@ -398,10 +430,11 @@ function startLoop() {
     }
     
     step = 0;
+    wordIndex = 0; 
     gameScore = 0;
     gameCombo = 0;
-    scoreVal.innerText = gameScore;
-    comboVal.innerText = gameCombo;
+    if (scoreVal) scoreVal.innerText = gameScore;
+    if (comboVal) comboVal.innerText = gameCombo;
     
     window.removeEventListener('keydown', handleTypingInput); 
     window.addEventListener('keydown', handleTypingInput);
@@ -411,31 +444,70 @@ function startLoop() {
     processChantStep();
 }
 
+function pauseLoop() {
+    isPaused = true;
+    if (actionBtn) {
+        actionBtn.innerText = "RESUME GAME";
+        actionBtn.classList.remove('playing');
+    }
+    
+    if (currentAudioEl) currentAudioEl.pause();
+    if (timerId) clearInterval(timerId);
+    window.speechSynthesis.cancel();
+
+    if (wordDisplay) wordDisplay.innerHTML = `<span style="color: #94a3b8;">⏸️ PAUSED</span>`;
+    if (meaningDisplay) meaningDisplay.innerText = "ゲームを一時停止しているよ";
+}
+
+function resumeLoop() {
+    isPaused = false;
+    if (actionBtn) {
+        actionBtn.innerText = "PAUSE GAME";
+        actionBtn.classList.add('playing');
+    }
+    
+    if (currentAudioEl) currentAudioEl.play().catch(e => console.log(e));
+    
+    if (step === 3) {
+        renderTypingWord();
+    } else {
+        step = Math.max(0, step - 1);
+        resetBeatTimer();
+        processChantStep();
+    }
+}
+
 function stopLoop() {
     isPlaying = false;
-    actionBtn.innerText = "START GAME";
-    actionBtn.classList.remove('playing');
+    isPaused = false;
+    if (actionBtn) {
+        actionBtn.innerText = "START GAME";
+        actionBtn.classList.remove('playing');
+    }
+    if (stopBtn) stopBtn.style.display = "none"; 
     
     stopAllBgm();
     
     if (timerId) clearInterval(timerId);
     if (countdownTimerId) clearInterval(countdownTimerId);
     
-    timerSetupPanel.style.display = 'flex';
-    timeLeftDisplay.style.display = 'none';
+    if (timerSetupPanel) timerSetupPanel.style.display = 'flex';
+    if (timeLeftDisplay) timeLeftDisplay.style.display = 'none';
 
     window.removeEventListener('keydown', handleTypingInput);
     window.speechSynthesis.cancel(); 
-    wordDisplay.innerHTML = "Ready?";
-    meaningDisplay.innerText = "Press Start";
+    if (wordDisplay) wordDisplay.innerHTML = "Ready?";
+    if (meaningDisplay) meaningDisplay.innerText = "Press Start";
 }
 
 function resetBeatTimer() {
     if (timerId) clearInterval(timerId);
+    if (step === 3 || isPaused) return; 
     timerId = setInterval(processChantStep, beatInterval);
 }
 
 function renderTypingWord() {
+    if (isPaused || !wordDisplay) return;
     let htmlStr = "";
     for (let i = 0; i < targetString.length; i++) {
         if (i < typedIndex) {
@@ -455,7 +527,7 @@ function renderTypingWord() {
 }
 
 function checkAndSkipNonAlpha() {
-    if (currentPlaylist.length === 0 || wordIndex >= currentPlaylist.length) return;
+    if (!currentPlaylist || currentPlaylist.length === 0 || wordIndex >= currentPlaylist.length) return;
     const currentItem = currentPlaylist[wordIndex];
     let skippable = ['→', '.', '?', '-'];
     
@@ -470,6 +542,7 @@ function checkAndSkipNonAlpha() {
 }
 
 function triggerComboPopup(comboCount) {
+    if (isPaused || !comboPopup) return;
     comboPopup.innerText = `🔥 ${comboCount}問連続正解！`;
     comboPopup.classList.remove('pop-animate');
     void comboPopup.offsetWidth; 
@@ -477,18 +550,16 @@ function triggerComboPopup(comboCount) {
 }
 
 function processChantStep() {
-    if (currentPlaylist.length === 0) { 
-        if(activeCategory === 'revenge') {
-            playRevengeClearSound();
-            alert("すごいや！にがてな単語をすべてリベンジしたよ！完全クリア！");
-            revengeDb = [];
-            revengeTabBtn.style.display = 'none';
-            switchCategory('all', document.querySelector('.nav-btn'));
-        } else {
-            stopLoop(); 
-        }
+    if (isPaused) return;
+    if (!currentPlaylist || currentPlaylist.length === 0) { 
+        stopLoop();
         return; 
     }
+    
+    if (wordIndex >= currentPlaylist.length || wordIndex < 0) {
+        wordIndex = 0;
+    }
+
     const currentVocab = currentPlaylist[wordIndex];
 
     switch(step) {
@@ -500,66 +571,90 @@ function processChantStep() {
             
             checkAndSkipNonAlpha();
             renderTypingWord();
-            meaningDisplay.innerText = "---";
+            if (meaningDisplay) meaningDisplay.innerText = "---";
             
-            // 🌟 英語テキストをきれいにクリーニングして読み上げ
             speak(cleanTextForTTS(currentVocab.word, currentVocab.meaning), 'en-US');
             step = 1;
             break;
         case 1: 
-            meaningDisplay.innerText = currentVocab.meaning;
+            if (meaningDisplay) meaningDisplay.innerText = currentVocab.meaning;
             
             let cleanJapanese = currentVocab.meaning
                 .replace(/（[^）]*）/g, '')  
                 .replace(/\([^)]*\)/g, '')   
                 .trim();                     
+            
+            // ★音声バグ修正：「来る」の漢字が入っていたら「くる」に置換して誤読を防止する
+            if (cleanJapanese.includes('来る')) {
+                cleanJapanese = cleanJapanese.replace(/来る/g, 'くる');
+            }
+
+            if (cleanJapanese.includes('間')) {
+                cleanJapanese = cleanJapanese.replace(/間/g, 'あいだ');
+            }
                 
             speak(cleanJapanese, 'ja-JP');
             step = 2;
             break;
         case 2: 
             speak(cleanTextForTTS(currentVocab.word, currentVocab.meaning), 'en-US');
-            step = 3;
+            step = 3; 
+            if (timerId) clearInterval(timerId); 
+            renderTypingWord(); 
             break;
-        case 3: 
+        case 3:
             if (isCurrentWordCleared) {
                 gameScore += 10 + Math.floor(gameCombo / 5);
                 gameCombo += 1;
-                
-                if (gameCombo > 0 && gameCombo % 5 === 0) {
-                    triggerComboPopup(gameCombo);
-                }
+                if (gameCombo > 0 && gameCombo % 5 === 0) triggerComboPopup(gameCombo);
 
                 if (activeCategory === 'revenge') {
                     revengeDb = revengeDb.filter(item => item.id !== currentVocab.id);
                 }
             } else {
                 gameCombo = 0;
-                if (!revengeDb.some(item => item.id === currentVocab.id)) {
-                    revengeDb.push(currentVocab);
-                }
+                if (!revengeDb.some(item => item.id === currentVocab.id)) revengeDb.push(currentVocab);
             }
-            scoreVal.innerText = gameScore;
-            comboVal.innerText = gameCombo;
+            if (scoreVal) scoreVal.innerText = gameScore;
+            if (comboVal) comboVal.innerText = gameCombo;
 
-            wordDisplay.innerHTML = "<span style='color: var(--shuffle-color)'>• • •</span>";
-            meaningDisplay.innerText = "";
-            
             if (activeCategory === 'revenge' && isCurrentWordCleared) {
                 applyFilterAndShuffle();
-                if(wordIndex >= currentPlaylist.length) wordIndex = 0;
+                wordIndex = 0;
+                if(currentPlaylist.length === 0) {
+                    playRevengeClearSound();
+                    alert("すごいや！にがてな単語をすべてリベンジしたよ！完全クリア！");
+                    revengeDb = [];
+                    if (revengeTabBtn) revengeTabBtn.style.display = 'none';
+                    switchCategory('all', document.querySelector('.nav-btn'));
+                    return;
+                }
             } else {
                 wordIndex = (wordIndex + 1) % currentPlaylist.length;
             }
 
-            step = 0;
+            step = 0; 
+            resetBeatTimer(); 
+            processChantStep(); 
             break;
     }
 }
 
 function handleTypingInput(e) {
-    if (e.key === ' ') {
-        e.preventDefault();
+    if (isPaused) return; 
+
+    if (e.key === ' ' || e.key === 'Enter') {
+        if (isPlaying) {
+            e.preventDefault();
+        }
+    }
+
+    if (step === 3 && e.key === 'Enter') {
+        if (document.activeElement && document.activeElement.blur) {
+            document.activeElement.blur();
+        }
+        processChantStep(); 
+        return;
     }
 
     if (targetString === "" || isCurrentWordCleared) return; 
@@ -577,51 +672,46 @@ function handleTypingInput(e) {
             checkAndSkipNonAlpha(); 
             renderTypingWord();
 
-            if (step >= 1) {
-                resetBeatTimer(); 
-            }
-
             if (typedIndex >= targetString.length) {
                 isCurrentWordCleared = true;
                 playWordCompleteSound(); 
+                if (step >= 2) renderTypingWord();
             } else {
                 playKeySuccessSound();   
             }
         } 
-        else if (key !== "Shift" && key !== "CapsLock" && key !== "Control" && key !== "Alt") {
+        else if (key !== "Shift" && key !== "CapsLock" && key !== "Control" && key !== "Alt" && key !== "Enter") {
             hasError = true; 
             renderTypingWord(); 
         }
     }
 }
 
-// 🌟 英語の読み上げテキストを最適化する関数（日本語の意味も一緒にチェック）
 function cleanTextForTTS(rawText, rawMeaning) {
-    // 記号などをカット
-    let text = rawText.replace('→', ' changed to ').replace('...', '').trim().toLowerCase();
+    let text = rawText.trim().toLowerCase();
     let meaning = rawMeaning ? rawMeaning.trim() : "";
 
-    // 【徹底強化】
-    // 単語が「read」で始まる、かつ日本語訳に「読んだ」などの過去形のニュアンスが含まれている場合、
-    // または登録語自体に過去形を指すキーワードが含まれている場合は、確実に「red（レッド）」と発音させる
-    if (text.startsWith('read')) {
-        if (meaning.includes('読んだ') || text.includes('過去') || text.includes('past')) {
-            return 'red';
+    if (text.includes('→') || text.includes('->')) {
+        let parts = text.split(/[→]|\-\>/);
+        if (parts.length === 2) {
+            let before = parts[0].trim();
+            let after = parts[1].trim();
+
+            if (before === 'read' && after === 'read') return 'read changed to red';
+            return `${before} changed to ${after}`;
         }
-        // 単体の "read" で日本語に特記がない場合でも、念のため過去形として扱いたい場合はここを'red'に固定可能。
-        // 今回は「読んだ」という過去形データに対して確実に「レッド」と発音させます。
-        if (meaning.includes('読んだ')) {
-            return 'red';
-        }
-        
-        // 4級・3級の「read（過去形）」単体カード対策
-        return 'red';
+    }
+
+    if (text === 'read') {
+        if (meaning.includes('読んだ') || meaning.includes('過去')) return 'red';
+        return 'read';
     }
     
     return rawText.replace('→', ' changed to ').replace('...', '');
 }
 
 function speak(text, lang) {
+    if (isPaused) return;
     window.speechSynthesis.cancel(); 
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = lang;
@@ -629,5 +719,73 @@ function speak(text, lang) {
     window.speechSynthesis.speak(utterance);
 }
 
-loadSavedData();
-applyFilterAndShuffle();
+// --- ⚙️ イベントリスナーの一元登録 ---
+document.addEventListener('DOMContentLoaded', () => {
+    initBgmTracks();
+
+    document.querySelectorAll('[data-category]').forEach(btn => {
+        if (btn.id === 'action-btn' || btn.id === 'shuffle-btn') return;
+
+        btn.addEventListener('click', (e) => {
+            const category = e.target.getAttribute('data-category');
+            switchCategory(category, e.target);
+            e.target.blur();
+        });
+    });
+
+    // シャッフルボタン
+    if (shuffleBtn) {
+        shuffleBtn.addEventListener('click', (e) => {
+            toggleShuffle();
+            e.target.blur();
+        });
+    }
+
+    // スタート / 一時停止 ボタン
+    if (actionBtn) {
+        actionBtn.addEventListener('click', (e) => {
+            toggleApp();
+            e.target.blur();
+        });
+    }
+
+    // ストップボタン
+    if (stopBtn) {
+        stopBtn.addEventListener('click', (e) => {
+            stopLoop();
+            e.target.blur();
+        });
+    }
+
+    // 覚えたボタン
+    const masterBtn = document.getElementById('master-btn');
+    if (masterBtn) {
+        masterBtn.addEventListener('click', (e) => {
+            markAsMastered();
+            e.target.blur();
+        });
+    }
+
+    // 初期化ボタン
+    const resetBtn = document.getElementById('reset-btn');
+    if (resetBtn) {
+        resetBtn.addEventListener('click', (e) => {
+            resetLocalStorage();
+            e.target.blur();
+        });
+    }
+
+    // 単語追加ボタン
+    const addWordBtn = document.getElementById('add-word-btn');
+    if (addWordBtn) {
+        addWordBtn.addEventListener('click', (e) => {
+            addCustomWord();
+            e.target.blur();
+        });
+    }
+
+    loadSavedData();
+    setupDurationSelect(); 
+    applyFilterAndShuffle();
+});
+
