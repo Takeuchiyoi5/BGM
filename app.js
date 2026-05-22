@@ -1,7 +1,8 @@
 /* ==========================================================================
   【ファイル役割】
   タイピングゲームの進行、タイマー、およびカテゴリごとのBGM切り替えを制御します。
-  ★日本語読み上げ時に、すべての種類の（）とその中身を完全に消去して読み上げます。
+  ★日本語のカッコ完全カットに加え、「read」の過去形データ（カッコ書き等が含まれていても）
+    を確実に「red（レッド）」として正しくネイティブ発音させるようにロジックを強化しました。
   ==========================================================================
 */
 
@@ -313,13 +314,13 @@ function markAsMastered() {
 
 function addCustomWord() {
     const wordInput = document.getElementById('custom-word');
-    const meaningInput = document.getElementById('custom-meaning');
-    if (!wordInput.value.trim() || !meaningInput.value.trim()) return;
+    const wordMeaningInput = document.getElementById('custom-meaning');
+    if (!wordInput.value.trim() || !wordMeaningInput.value.trim()) return;
 
     const newEntry = {
         id: Date.now(), 
         word: wordInput.value.trim().toLowerCase(), 
-        meaning: meaningInput.value.trim(),
+        meaning: wordMeaningInput.value.trim(),
         tag: "custom"
     };
 
@@ -329,7 +330,7 @@ function addCustomWord() {
     localStorage.setItem('eiken4_customWords', JSON.stringify(customList));
     
     wordInput.value = '';
-    meaningInput.value = '';
+    wordMeaningInput.value = '';
     loadSavedData(); 
     if (activeCategory === 'custom' || activeCategory === 'all') applyFilterAndShuffle();
 }
@@ -500,23 +501,24 @@ function processChantStep() {
             checkAndSkipNonAlpha();
             renderTypingWord();
             meaningDisplay.innerText = "---";
-            speak(cleanTextForTTS(currentVocab.word), 'en-US');
+            
+            // 🌟 英語テキストをきれいにクリーニングして読み上げ
+            speak(cleanTextForTTS(currentVocab.word, currentVocab.meaning), 'en-US');
             step = 1;
             break;
         case 1: 
             meaningDisplay.innerText = currentVocab.meaning;
             
-            // 🌟 全角（）および半角() と、その中身をどんな文言でも完全に削除する正規表現に変更
             let cleanJapanese = currentVocab.meaning
-                .replace(/（[^）]*）/g, '')  // 全角の（）を中身ごと消す
-                .replace(/\([^)]*\)/g, '')   // 半角の () を中身ごと消す
-                .trim();                     // 前後の余計なスペースを消す
+                .replace(/（[^）]*）/g, '')  
+                .replace(/\([^)]*\)/g, '')   
+                .trim();                     
                 
             speak(cleanJapanese, 'ja-JP');
             step = 2;
             break;
         case 2: 
-            speak(cleanTextForTTS(currentVocab.word), 'en-US');
+            speak(cleanTextForTTS(currentVocab.word, currentVocab.meaning), 'en-US');
             step = 3;
             break;
         case 3: 
@@ -593,4 +595,39 @@ function handleTypingInput(e) {
     }
 }
 
-function cleanTextForTTS(rawText) {
+// 🌟 英語の読み上げテキストを最適化する関数（日本語の意味も一緒にチェック）
+function cleanTextForTTS(rawText, rawMeaning) {
+    // 記号などをカット
+    let text = rawText.replace('→', ' changed to ').replace('...', '').trim().toLowerCase();
+    let meaning = rawMeaning ? rawMeaning.trim() : "";
+
+    // 【徹底強化】
+    // 単語が「read」で始まる、かつ日本語訳に「読んだ」などの過去形のニュアンスが含まれている場合、
+    // または登録語自体に過去形を指すキーワードが含まれている場合は、確実に「red（レッド）」と発音させる
+    if (text.startsWith('read')) {
+        if (meaning.includes('読んだ') || text.includes('過去') || text.includes('past')) {
+            return 'red';
+        }
+        // 単体の "read" で日本語に特記がない場合でも、念のため過去形として扱いたい場合はここを'red'に固定可能。
+        // 今回は「読んだ」という過去形データに対して確実に「レッド」と発音させます。
+        if (meaning.includes('読んだ')) {
+            return 'red';
+        }
+        
+        // 4級・3級の「read（過去形）」単体カード対策
+        return 'red';
+    }
+    
+    return rawText.replace('→', ' changed to ').replace('...', '');
+}
+
+function speak(text, lang) {
+    window.speechSynthesis.cancel(); 
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = lang;
+    utterance.rate = 1.0; 
+    window.speechSynthesis.speak(utterance);
+}
+
+loadSavedData();
+applyFilterAndShuffle();
