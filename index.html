@@ -23,30 +23,30 @@
     <div class="timer-display" id="time-left-display" style="display:none;">⏱️ 残り時間: --:--</div>
 
     <div class="category-menu">
-        <button class="nav-btn active" onclick="switchCategory('all', this)">全て</button>
-        <button class="nav-btn" onclick="switchCategory('how', this)">4級 How</button>
-        <button class="nav-btn" onclick="switchCategory('verbs', this)">4級 動詞</button>
-        <button class="nav-btn" onclick="switchCategory('adj', this)">4級 形容詞</button>
-        <button class="nav-btn" onclick="switchCategory('noun', this)">4級 名詞</button>
-        <button class="nav-btn" onclick="switchCategory('prep', this)">4級 前置詞</button>
+        <button type="button" class="nav-btn active" data-category="all">全て</button>
+        <button type="button" class="nav-btn" data-category="how">4級 How</button>
+        <button type="button" class="nav-btn" data-category="verbs">4級 動詞</button>
+        <button type="button" class="nav-btn" data-category="adj">4級 形容詞</button>
+        <button type="button" class="nav-btn" data-category="noun">4級 名詞</button>
+        <button type="button" class="nav-btn" data-category="prep">4級 前置詞</button>
         
-        <button class="nav-btn btn-3kyu" onclick="switchCategory('verbs3', this)">③級 動詞</button>
-        <button class="nav-btn btn-3kyu" onclick="switchCategory('adj3', this)">③級 形容詞</button>
-        <button class="nav-btn btn-3kyu" onclick="switchCategory('noun3', this)">③級 名詞</button>
-        <button class="nav-btn btn-3kyu btn-idiom" onclick="switchCategory('idiom3', this)">③級 熟語特訓</button>
+        <button type="button" class="nav-btn btn-3kyu" data-category="verbs3">③級 動詞</button>
+        <button type="button" class="nav-btn btn-3kyu" data-category="adj3">③級 形容詞</button>
+        <button type="button" class="nav-btn btn-3kyu" data-category="noun3">③級 名詞</button>
+        <button type="button" class="nav-btn btn-3kyu btn-idiom" data-category="idiom3">③級 熟語特訓</button>
         
-        <button class="nav-btn" id="revenge-tab-btn" style="display:none; background-color:#ffe2e2; border: 2px solid var(--error-color); color: var(--error-color); grid-column: span 3;" onclick="switchCategory('revenge', this)">🔥 リベンジモード</button>
-        <button class="nav-btn" style="grid-column: span 3;" onclick="switchCategory('custom', this)">📥 自作カスタム単語</button>
-    </div>
+        <button type="button" class="nav-btn" id="revenge-tab-btn" style="display:none; background-color:#ffe2e2; border: 2px solid var(--error-color); color: var(--error-color); grid-column: span 3;" data-category="revenge">🔥 リベンジモード</button>
+        </div>
 
     <div class="shuffle-panel">
-        <button id="shuffle-btn" class="shuffle-btn" onclick="toggleShuffle()">🔀 シャッフル：OFF</button>
+        <button type="button" id="shuffle-btn" class="shuffle-btn">🔀 シャッフル：OFF</button>
     </div>
 
     <div id="word-display">Ready?</div>
     <div id="meaning-display">Press Start</div>
     
-    <button id="action-btn" class="main-action" onclick="toggleApp()">START GAME</button>
+    <button type="button" id="action-btn" class="main-action">START GAME</button>
+    <button type="button" id="stop-btn" class="main-action" style="background-color: #64748b; margin-top: 10px; display: none;">LESSON STOP</button>
     
     <div class="score-banner">
         <div>⭐ Score: <span id="score-val">0</span></div>
@@ -54,8 +54,8 @@
     </div>
 
     <div class="mastery-panel">
-        <button class="mastery-btn" style="background-color: var(--success-color); color: #155e75;" onclick="markAsMastered()">💖 覚えた！隠す</button>
-        <button class="mastery-btn" style="background-color: #fee2e2; color: #991b1b; font-size:0.75rem;" onclick="resetLocalStorage()">🔄 全初期化</button>
+        <button type="button" id="master-btn" class="mastery-btn" style="background-color: var(--success-color); color: #155e75;">💖 覚えた！隠す</button>
+        <button type="button" id="reset-btn" class="mastery-btn" style="background-color: #fee2e2; color: #991b1b; font-size:0.75rem;">🔄 全初期化</button>
     </div>
 
     <div class="custom-entry-box">
@@ -64,7 +64,9 @@
             <input type="text" id="custom-word" placeholder="例: play → plays">
             <input type="text" id="custom-meaning" placeholder="例: 遊ぶ → 遊んだ">
         </div>
-        <button class="add-word-btn" onclick="addCustomWord()">単語を追加保存する</button>
+        <button type="button" id="add-word-btn" class="add-word-btn">単語を追加保存する</button>
+        
+        <button type="button" class="nav-btn" style="width: 100%; margin-top: 8px; background-color: #fff5f8; border: 1px solid var(--shuffle-color); color: #7d6b8d;" data-category="custom">📥 自作カスタム単語をれんしゅうする</button>
     </div>
 
     <div class="controls">
