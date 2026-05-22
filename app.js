@@ -1,7 +1,7 @@
 /* ==========================================================================
   【ファイル役割】
   タイピングゲームの進行、タイマー、およびカテゴリごとのBGM切り替えを制御します。
-  ★日本語読み上げ時に「（〜の形）」などの補足説明を自動でカットする機能を追加しました。
+  ★日本語読み上げ時に、すべての種類の（）とその中身を完全に消去して読み上げます。
   ==========================================================================
 */
 
@@ -505,8 +505,13 @@ function processChantStep() {
             break;
         case 1: 
             meaningDisplay.innerText = currentVocab.meaning;
-            // 🌟 【変更点】読み上げ用テキストからカッコとその中身（例: 「（sが付く形）」）を除去
-            let cleanJapanese = currentVocab.meaning.replace(/（[^）]*）/g, '').replace(/\([^)]*\)/g, '').trim();
+            
+            // 🌟 全角（）および半角() と、その中身をどんな文言でも完全に削除する正規表現に変更
+            let cleanJapanese = currentVocab.meaning
+                .replace(/（[^）]*）/g, '')  // 全角の（）を中身ごと消す
+                .replace(/\([^)]*\)/g, '')   // 半角の () を中身ごと消す
+                .trim();                     // 前後の余計なスペースを消す
+                
             speak(cleanJapanese, 'ja-JP');
             step = 2;
             break;
@@ -589,16 +594,3 @@ function handleTypingInput(e) {
 }
 
 function cleanTextForTTS(rawText) {
-    return rawText.replace('→', ' changed to ').replace('...', '');
-}
-
-function speak(text, lang) {
-    window.speechSynthesis.cancel(); 
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = lang;
-    utterance.rate = 1.0; 
-    window.speechSynthesis.speak(utterance);
-}
-
-loadSavedData();
-applyFilterAndShuffle();
