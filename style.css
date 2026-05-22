@@ -180,27 +180,43 @@ body {
     font-weight: bold;
 }
 
+/* ★ アクションボタン共通の基本スタイル */
 .main-action {
-    background-color: var(--accent); 
     color: white;
     border: none;
-    padding: 1.1rem 3rem;
-    font-size: 1.4rem;
+    padding: 1.1rem 2rem;
+    font-size: 1.3rem;
     font-weight: bold;
     border-radius: 9999px;
     cursor: pointer;
     width: 100%;
     box-shadow: 0 6px 15px rgba(255, 126, 187, 0.4);
-    letter-spacing: 2px;
+    letter-spacing: 1px;
+    transition: all 0.2s ease;
+    box-sizing: border-box;
 }
 
-.main-action.playing {
+/* START / RESUME 時のストロベリーピンク */
+#action-btn {
+    background-color: var(--accent);
+}
+
+/* PAUSE（一時停止中）の赤色 */
+#action-btn.playing {
     background-color: #ff5252 !important; 
     box-shadow: 0 6px 15px rgba(255, 82, 82, 0.4) !important;
 }
 
+/* ★ レッスン終了（STOP）ボタン専用の落ち着いたシックなスタイル */
+#stop-btn {
+    background-color: #94a3b8 !important; /* シックなグレー */
+    font-size: 1.1rem;
+    padding: 0.8rem 2rem;
+    box-shadow: 0 4px 10px rgba(148, 163, 184, 0.3);
+}
+
 .score-banner {
-    margin-top: 1rem;
+    margin-top: 1.5rem;
     font-size: 1.1rem;
     font-weight: bold;
     color: #6b5b95;
