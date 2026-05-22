@@ -1,3 +1,9 @@
+/* ==========================================================================
+  【ファイル役割】
+  タイピングゲームの進行、タイマー、およびカテゴリごとのBGM切り替えを完全に制御します。
+  ==========================================================================
+*/
+
 const beatInterval = 2000; 
 
 let masterVocabDb = [];
@@ -24,19 +30,21 @@ let totalSecondsLeft = 0;
 
 let audioCtx = null;
 
-// --- 🎵 BGMシステム：5曲クロスフェード＆120秒ループ制御 ---
+// --- 🎵 BGMシステム：5つのゲーム（カテゴリ）ごとの選曲マップ ---
 let currentAudioEl = null;
 let allModeTrackIndex = 0;
 let allModeTimerId = null;
 
+// HTML側の<audio>要素を取得
 const bgTracks = {
-    how: document.getElementById('bg-track-how'),     // How：キラキラアイドル.mp3
-    verbs: document.getElementById('bg-track-verbs'), // 動詞：Pop_swing.mp3
-    adj: document.getElementById('bg-track-adj'),     // 形容詞：Snack_time.mp3
-    noun: document.getElementById('bg-track-noun'),   // 名詞：かわいいきみ。.mp3
-    idiom: document.getElementById('bg-track-idiom')  // 熟語・その他：わた雲を食べて.mp3
+    how: document.getElementById('bg-track-how'),     // How特訓：キラキラアイドル.mp3
+    verbs: document.getElementById('bg-track-verbs'), // 4級/3級動詞：Pop_swing.mp3
+    adj: document.getElementById('bg-track-adj'),     // 4級/3級形容詞：Snack_time.mp3
+    noun: document.getElementById('bg-track-noun'),   // 4級/3級名詞：かわいいきみ。.mp3
+    idiom: document.getElementById('bg-track-idiom')  // 3級熟語・その他すべて：わた雲を食べて.mp3
 };
 
+// 全て（ALL）モードの時のローテーション順序
 const allModePlaylist = [
     bgTracks.how, 
     bgTracks.verbs, 
@@ -58,40 +66,31 @@ const timeLeftDisplay = document.getElementById('time-left-display');
 const durationSelect = document.getElementById('game-duration-select');
 const revengeTabBtn = document.getElementById('revenge-tab-btn');
 
-function syncVolume() {
-    const vol = parseFloat(volumeSlider.value);
-    Object.values(bgTracks).forEach(track => {
-        if (track !== currentAudioEl) track.volume = 0;
-    });
-    if (currentAudioEl) currentAudioEl.volume = vol;
-}
-
-volumeSlider.addEventListener('input', () => {
-    if (currentAudioEl) currentAudioEl.volume = parseFloat(volumeSlider.value);
-});
-
+// カテゴリ名から流すべきBGM要素を1対1で特定する関数
 function getTrackForCategory(category) {
     if (category === 'how') return bgTracks.how;
     if (category === 'verbs' || category === 'verbs3') return bgTracks.verbs;
     if (category === 'adj' || category === 'adj3') return bgTracks.adj;
     if (category === 'noun' || category === 'noun3') return bgTracks.noun;
-    return bgTracks.idiom;
+    return bgTracks.idiom; // prep, custom, revenge, idiom3 はすべてこれ
 }
 
-// 🎵 滑らかなクロスフェード（フェードアウト＆フェードイン）
+// 🎵 滑らかなクロスフェード（確実に前の曲を消し、新しい曲を再生）
 function fadeTransitionTo(newTrack) {
+    if (!newTrack) return;
     const targetVol = parseFloat(volumeSlider.value);
-    const fadeDuration = 1500; 
-    const steps = 20;
+    const fadeDuration = 1000; // 1秒でクロスフェード
+    const steps = 10;
     const interval = fadeDuration / steps;
 
+    // 現在流れている曲があり、それが新しい曲と違う場合はフェードアウト
     if (currentAudioEl && currentAudioEl !== newTrack) {
         let oldTrack = currentAudioEl;
         let outStep = 0;
         let fadeOutId = setInterval(() => {
             outStep++;
             let ratio = 1 - (outStep / steps);
-            oldTrack.volume = targetVol * ratio;
+            oldTrack.volume = Math.max(0, targetVol * ratio);
             if (outStep >= steps) {
                 clearInterval(fadeOutId);
                 oldTrack.pause();
@@ -100,11 +99,17 @@ function fadeTransitionTo(newTrack) {
         }, interval);
     }
 
+    // 新しい曲を現在のトラックに指定
     currentAudioEl = newTrack;
-    if (isPlaying && currentAudioEl) {
+    
+    // ゲームプレイ中の場合のみ音量をゼロからフェードインさせて再生
+    if (isPlaying) {
         currentAudioEl.volume = 0;
-        currentAudioEl.currentTime = 0;
-        currentAudioEl.play().catch(e => console.log("BGM再生がブロックされました"));
+        // 途中で切り替わった場合も考慮し、既に対象の曲が流れていなければ最初から再生
+        if (currentAudioEl.paused) {
+            currentAudioEl.currentTime = 0;
+            currentAudioEl.play().catch(e => console.log("BGM再生がブラウザにブロックされました（キー操作で解除されます）"));
+        }
 
         let inStep = 0;
         let fadeInId = setInterval(() => {
@@ -120,7 +125,7 @@ function fadeTransitionTo(newTrack) {
     }
 }
 
-// 🔄 ALLモード専用：120秒ごとに5曲をスイッチするループ
+// 🔄 「全て」モード専用：120秒ごとに5曲を自動でスイッチするループ
 function startAllModeBgmCycle() {
     if (allModeTimerId) clearInterval(allModeTimerId);
     allModeTrackIndex = 0;
@@ -136,12 +141,19 @@ function startAllModeBgmCycle() {
 function stopAllBgm() {
     if (allModeTimerId) clearInterval(allModeTimerId);
     Object.values(bgTracks).forEach(track => {
-        track.pause();
-        track.currentTime = 0;
-        track.volume = 0;
+        if(track) {
+            track.pause();
+            track.currentTime = 0;
+            track.volume = 0;
+        }
     });
     currentAudioEl = null;
 }
+
+// 音量スライダー変更時のリアルタイム反映
+volumeSlider.addEventListener('input', () => {
+    if (currentAudioEl) currentAudioEl.volume = parseFloat(volumeSlider.value);
+});
 // --- 🎵 BGMシステムここまで ---
 
 function initAudioContext() {
@@ -240,12 +252,12 @@ function applyFilterAndShuffle() {
     }
 }
 
+// 🌟 カテゴリメニューボタンが押された時の処理（再生中なら即座にBGMを切り替える）
 function switchCategory(categoryTag, element) {
-    const wasPlaying = isPlaying;
-    if (isPlaying) stopLoop();
     document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
     element.classList.add('active');
     activeCategory = categoryTag;
+    
     applyFilterAndShuffle();
     wordIndex = 0;
     step = 0;
@@ -258,8 +270,17 @@ function switchCategory(categoryTag, element) {
         meaningDisplay.innerText = `Loaded ${currentPlaylist.length} items`;
     }
 
-    if (wasPlaying) {
-        startLoop();
+    // 🌟 プレイ中にカテゴリボタンが押された場合、即座に対応するBGMへ変更
+    if (isPlaying) {
+        if (activeCategory === 'all') {
+            startAllModeBgmCycle();
+        } else {
+            if (allModeTimerId) clearInterval(allModeTimerId); // ALLモードのタイマーを解除
+            fadeTransitionTo(getTrackForCategory(activeCategory));
+        }
+        // 音声読み上げやテンポラリタイマーをリセットして次のステップへ
+        resetBeatTimer();
+        processChantStep();
     }
 }
 
@@ -267,12 +288,14 @@ function toggleShuffle() {
     isShuffleOn = !isShuffleOn;
     shuffleBtn.innerText = isShuffleOn ? "🔀 シャッフル：ON" : "🔀 シャッフル：OFF";
     shuffleBtn.classList.toggle('active', isShuffleOn);
-    const currentlyPlaying = isPlaying;
-    if (currentlyPlaying) stopLoop();
+    
     applyFilterAndShuffle();
     wordIndex = 0;
     step = 0;
-    if (currentlyPlaying) startLoop();
+    if (isPlaying) {
+        resetBeatTimer();
+        processChantStep();
+    }
 }
 
 function markAsMastered() {
@@ -285,13 +308,15 @@ function markAsMastered() {
     masteredIds.push(currentItem.id); 
     saveProgress(); 
     alert(`「${currentItem.word}」を覚えたリストに登録しました！`);
-    const currentlyPlaying = isPlaying;
-    if (currentlyPlaying) stopLoop();
+    
     applyFilterAndShuffle();
     wordIndex = 0;
     step = 0;
     wordDisplay.innerHTML = "Saved!";
-    if (currentlyPlaying && currentPlaylist.length > 0) startLoop();
+    if (isPlaying && currentPlaylist.length > 0) {
+        resetBeatTimer();
+        processChantStep();
+    }
 }
 
 function addCustomWord() {
@@ -329,6 +354,7 @@ function startCountdown() {
     totalSecondsLeft = minutes * 60;
     updateTimerText();
 
+    if (countdownTimerId) clearInterval(countdownTimerId);
     countdownTimerId = setInterval(() => {
         totalSecondsLeft--;
         updateTimerText();
@@ -372,6 +398,7 @@ function startLoop() {
     actionBtn.innerText = "STOP GAME";
     actionBtn.classList.add('playing');
     
+    // 🌟 ゲーム開始時のBGM選定と再生開始
     if (activeCategory === 'all') {
         startAllModeBgmCycle();
     } else {
@@ -384,6 +411,7 @@ function startLoop() {
     scoreVal.innerText = gameScore;
     comboVal.innerText = gameCombo;
     
+    window.removeEventListener('keydown', handleTypingInput); // 重複防止
     window.addEventListener('keydown', handleTypingInput);
     
     startCountdown(); 
