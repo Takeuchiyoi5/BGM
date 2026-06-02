@@ -577,7 +577,7 @@ function processChantStep() {
         return; 
     }
     
-    // インデックスの安全な丸め（1問残りリベンジなどの範囲外エラー防止）
+    // インデックスの安全な丸め（範囲外エラー防止）
     if (wordIndex >= currentPlaylist.length || wordIndex < 0) {
         wordIndex = 0;
     }
@@ -619,10 +619,12 @@ function processChantStep() {
         case 2: 
             speak(cleanTextForTTS(currentVocab.word, currentVocab.meaning), 'en-US');
             step = 3; 
+            // タイピング待ち(Step 3)に入るため、ここで一旦自動進行のタイマーを止めます
             if (timerId) clearInterval(timerId); 
             renderTypingWord(); 
             break;
         case 3:
+            // スコア・コンボの計算とリベンジDbの処理
             if (isCurrentWordCleared) {
                 gameScore += 10 + Math.floor(gameCombo / 5);
                 gameCombo += 1;
@@ -638,7 +640,7 @@ function processChantStep() {
             if (scoreVal) scoreVal.innerText = gameScore;
             if (comboVal) comboVal.innerText = gameCombo;
 
-            // --- ★リベンジ時のインデックス処理を安全に改善 ---
+            // リベンジ時のインデックス処理
             if (activeCategory === 'revenge') {
                 applyFilterAndShuffle();
                 if(currentPlaylist.length === 0) {
@@ -649,10 +651,9 @@ function processChantStep() {
                     switchCategory('all', document.querySelector('.nav-btn'));
                     return;
                 }
-                // リストが減るため、安全に最初の要素へ戻す
                 wordIndex = 0;
             } else {
-                // 通常モードは次へ。最後の問題なら最初(0)に戻る
+                // 通常モードは次の単語へ
                 wordIndex = (wordIndex + 1) % currentPlaylist.length;
             }
 
@@ -666,18 +667,11 @@ function processChantStep() {
 function handleTypingInput(e) {
     if (isPaused) return; 
 
+    // スペースキーやEnterキーでのスクロールや誤動作を防止
     if (e.key === ' ' || e.key === 'Enter') {
         if (isPlaying) {
             e.preventDefault();
         }
-    }
-
-    if (step === 3 && e.key === 'Enter') {
-        if (document.activeElement && document.activeElement.blur) {
-            document.activeElement.blur();
-        }
-        processChantStep(); 
-        return;
     }
 
     if (targetString === "" || isCurrentWordCleared) return; 
@@ -696,9 +690,15 @@ function handleTypingInput(e) {
             renderTypingWord();
 
             if (typedIndex >= targetString.length) {
+                // すべて正しく打ち終えた！
                 isCurrentWordCleared = true;
                 playWordCompleteSound(); 
-                if (step >= 2) renderTypingWord();
+                renderTypingWord();
+                
+                // ★Enterを待たずに、即座に次の問題への移行処理(Case 3)を実行！
+                setTimeout(() => {
+                    processChantStep();
+                }, 400); // 0.4秒だけ打ち終わりの余韻(効果音)を残して次へ進む
             } else {
                 playKeySuccessSound();   
             }
