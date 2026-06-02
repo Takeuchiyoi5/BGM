@@ -213,12 +213,16 @@ function playRevengeClearSound() {
     });
 }
 
+// --- 変更・修正する関数 ---
 function loadSavedData() {
     const savedMastered = localStorage.getItem('eiken4_masteredIds');
     masteredIds = savedMastered ? JSON.parse(savedMastered) : [];
     const savedCustomWords = localStorage.getItem('eiken4_customWords');
     const customWords = savedCustomWords ? JSON.parse(savedCustomWords) : [];
     masterVocabDb = typeof baseVocabDb !== 'undefined' ? [...baseVocabDb, ...customWords] : [...customWords];
+    
+    // ★追記：データを読み込んだら、画面の自作単語リストも更新する
+    renderCustomVocabList(customWords);
 }
 
 function setupDurationSelect() {
@@ -811,4 +815,95 @@ document.addEventListener('DOMContentLoaded', () => {
     loadSavedData();
     setupDurationSelect(); 
     applyFilterAndShuffle();
+});
+// --- ✨ 新しく追加する関数（リスト表示＆修正ロジック） ---
+
+function renderCustomVocabList(customWords) {
+    const listContainer = document.getElementById('custom-vocab-list');
+    if (!listContainer) return;
+
+    if (customWords.length === 0) {
+        listContainer.innerHTML = `<p style="color: #94a3b8; text-align: center; margin: 0;">登録された自作単語はまだありません</p>`;
+        return;
+    }
+
+    let html = `<p style="font-weight: bold; margin: 0 0 8px 0; color: #475569;">📝 登録ずみの単語（クリックで修正・削除）</p>`;
+    
+    // 登録した順（新しいものが上）に並べる
+    const reversedWords = [...customWords].reverse();
+
+    reversedWords.forEach(item => {
+        html += `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px dashed #e2e8f0;">
+                <div style="flex: 1; min-width: 0; padding-right: 8px;">
+                    <strong style="color: var(--primary-color); word-break: break-all;">${item.word}</strong> 
+                    <span style="color: #64748b; font-size: 0.75rem; block; word-break: break-all;">: ${item.meaning}</span>
+                </div>
+                <div style="display: flex; gap: 4px; flex-shrink: 0;">
+                    <button type="button" onclick="editCustomWord(${item.id})" style="background: #e0f2fe; color: #0369a1; border: none; padding: 2px 6px; border-radius: 4px; cursor: pointer; font-size: 0.75rem;">✏️直す</button>
+                    <button type="button" onclick="deleteCustomWord(${item.id})" style="background: #fee2e2; color: #b91c1c; border: none; padding: 2px 6px; border-radius: 4px; cursor: pointer; font-size: 0.75rem;">❌消す</button>
+                </div>
+            </div>
+        `;
+    });
+
+    listContainer.innerHTML = html;
+}
+
+// ✏️ 単語を修正する機能
+window.editCustomWord = function(id) {
+    if (isPlaying) {
+        alert("ゲーム中は単語の修正ができません。一度ストップしてください。");
+        return;
+    }
+    
+    const savedCustomWords = localStorage.getItem('eiken4_customWords');
+    if (!savedCustomWords) return;
+    let customList = JSON.parse(savedCustomWords);
+    
+    const targetItem = customList.find(item => item.id === id);
+    if (!targetItem) return;
+
+    // ポップアップで新しい入力を求める
+    const newWord = prompt("【英単語の修正】", targetItem.word);
+    if (newWord === null) return; // キャンセルされたら何もしない
+    
+    const newMeaning = prompt("【日本語の意味の修正】", targetItem.meaning);
+    if (newMeaning === null) return;
+
+    if (newWord.trim() === "" || newMeaning.trim() === "") {
+        alert("文字が空っぽのままで保存はできません。");
+        return;
+    }
+
+    // データを書き換える
+    targetItem.word = newWord.trim().toLowerCase();
+    targetItem.meaning = newMeaning.trim();
+
+    localStorage.setItem('eiken4_customWords', JSON.stringify(customList));
+    loadSavedData(); // 画面を再読込
+    if (activeCategory === 'custom' || activeCategory === 'all') applyFilterAndShuffle();
+    alert("単語を修正しました！");
+};
+
+// ❌ 単語を削除する機能
+window.deleteCustomWord = function(id) {
+    if (isPlaying) {
+        alert("ゲーム中は単語の削除ができません。一度ストップしてください。");
+        return;
+    }
+    
+    if (!confirm("この単語を削除してもよろしいですか？")) return;
+
+    const savedCustomWords = localStorage.getItem('eiken4_customWords');
+    if (!savedCustomWords) return;
+    let customList = JSON.parse(savedCustomWords);
+
+    // 指定されたID以外の単語だけ残す
+    customList = customList.filter(item => item.id !== id);
+
+    localStorage.setItem('eiken4_customWords', JSON.stringify(customList));
+    loadSavedData(); // 画面を再読込
+    if (activeCategory === 'custom' || activeCategory === 'all') applyFilterAndShuffle();
+};
 });
