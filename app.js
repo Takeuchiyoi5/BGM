@@ -1,7 +1,7 @@
 /* ==========================================================================
   【ファイル役割】
   タイピングゲームの進行、タイマー、およびカテゴリごとのBGM切り替えを制御します。
-  ★「毎日20個の積み上げ」「1問残りのリベンジバグ」「音声ブツ切り」を修正した完全版。
+  ★「毎日20個の積み上げ」「Enter不要の自動進行」「自作単語の修正・削除」を統合した完全版。
   ==========================================================================
 */
 
@@ -23,7 +23,7 @@ let activeCategory = 'all';
 let gameScore = 0;
 let gameCombo = 0;
 let targetString = "";  
-let typedIndex = 0;     
+let typedIndex = 0;      
 let isCurrentWordCleared = false; 
 let hasError = false; 
 
@@ -55,6 +55,92 @@ const durationSelect = document.getElementById('game-duration-select');
 const revengeTabBtn = document.getElementById('revenge-tab-btn');
 
 let allModePlaylist = [];
+
+// ==========================================================================
+// ✨ 自作カスタム単語の一覧表示・修正・削除ロジック（エラー回避のため上に配置）
+// ==========================================================================
+
+function renderCustomVocabList(customWords) {
+    const listContainer = document.getElementById('custom-vocab-list');
+    if (!listContainer) return;
+
+    if (!customWords || customWords.length === 0) {
+        listContainer.innerHTML = `<p style="color: #94a3b8; text-align: center; margin: 0;">登録された自作単語はまだありません</p>`;
+        return;
+    }
+
+    let html = `<p style="font-weight: bold; margin: 0 0 8px 0; color: #475569;">📝 登録ずみの単語（クリックで修正・削除）</p>`;
+    const reversedWords = [...customWords].reverse();
+
+    reversedWords.forEach(item => {
+        html += `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px dashed #e2e8f0;">
+                <div style="flex: 1; min-width: 0; padding-right: 8px;">
+                    <strong style="color: var(--primary-color); word-break: break-all;">${item.word}</strong> 
+                    <span style="color: #64748b; font-size: 0.75rem; block; word-break: break-all;">: ${item.meaning}</span>
+                </div>
+                <div style="display: flex; gap: 4px; flex-shrink: 0;">
+                    <button type="button" onclick="editCustomWord(${item.id})" style="background: #e0f2fe; color: #0369a1; border: none; padding: 2px 6px; border-radius: 4px; cursor: pointer; font-size: 0.75rem;">✏️直す</button>
+                    <button type="button" onclick="deleteCustomWord(${item.id})" style="background: #fee2e2; color: #b91c1c; border: none; padding: 2px 6px; border-radius: 4px; cursor: pointer; font-size: 0.75rem;">❌消す</button>
+                </div>
+            </div>
+        `;
+    });
+
+    listContainer.innerHTML = html;
+}
+
+window.editCustomWord = function(id) {
+    if (isPlaying) {
+        alert("ゲーム中は単語の修正ができません。一度ストップしてください。");
+        return;
+    }
+    const savedCustomWords = localStorage.getItem('eiken4_customWords');
+    if (!savedCustomWords) return;
+    let customList = JSON.parse(savedCustomWords);
+    const targetItem = customList.find(item => item.id === id);
+    if (!targetItem) return;
+
+    const newWord = prompt("【英単語の修正】", targetItem.word);
+    if (newWord === null) return; 
+    const newMeaning = prompt("【日本語の意味の修正】", targetItem.meaning);
+    if (newMeaning === null) return;
+
+    if (newWord.trim() === "" || newMeaning.trim() === "") {
+        alert("文字が空っぽのままで保存はできません。");
+        return;
+    }
+
+    targetItem.word = newWord.trim().toLowerCase();
+    targetItem.meaning = newMeaning.trim();
+
+    localStorage.setItem('eiken4_customWords', JSON.stringify(customList));
+    loadSavedData(); 
+    if (activeCategory === 'custom' || activeCategory === 'all') applyFilterAndShuffle();
+    alert("単語を修正しました！");
+};
+
+window.deleteCustomWord = function(id) {
+    if (isPlaying) {
+        alert("ゲーム中は単語の削除ができません。一度ストップしてください。");
+        return;
+    }
+    if (!confirm("この単語を削除してもよろしいですか？")) return;
+
+    const savedCustomWords = localStorage.getItem('eiken4_customWords');
+    if (!savedCustomWords) return;
+    let customList = JSON.parse(savedCustomWords);
+
+    customList = customList.filter(item => item.id !== id);
+
+    localStorage.setItem('eiken4_customWords', JSON.stringify(customList));
+    loadSavedData(); 
+    if (activeCategory === 'custom' || activeCategory === 'all') applyFilterAndShuffle();
+};
+
+// ==========================================================================
+// 基本システム関数
+// ==========================================================================
 
 function initBgmTracks() {
     bgTracks = {
@@ -213,7 +299,6 @@ function playRevengeClearSound() {
     });
 }
 
-// --- 変更・修正する関数 ---
 function loadSavedData() {
     const savedMastered = localStorage.getItem('eiken4_masteredIds');
     masteredIds = savedMastered ? JSON.parse(savedMastered) : [];
@@ -221,7 +306,6 @@ function loadSavedData() {
     const customWords = savedCustomWords ? JSON.parse(savedCustomWords) : [];
     masterVocabDb = typeof baseVocabDb !== 'undefined' ? [...baseVocabDb, ...customWords] : [...customWords];
     
-    // ★追記：データを読み込んだら、画面の自作単語リストも更新する
     renderCustomVocabList(customWords);
 }
 
@@ -260,15 +344,12 @@ function applyFilterAndShuffle() {
         return;
     }
 
-    // 覚えた単語を除外
     let baseList = masterVocabDb.filter(item => !masteredIds.includes(item.id));
     
-    // カテゴリフィルタリング
     if (activeCategory !== 'all') {
         baseList = baseList.filter(item => item.tag === activeCategory);
     }
 
-    // シャッフルONなら全体を混ぜる
     if (isShuffleOn) {
         for (let i = baseList.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
@@ -276,7 +357,6 @@ function applyFilterAndShuffle() {
         }
     }
 
-    // --- ★【毎日20個ずつ進むロジックの統合】---
     if (baseList.length > 0) {
         const today = new Date();
         const startOfYear = new Date(today.getFullYear(), 0, 0);
@@ -288,7 +368,6 @@ function applyFilterAndShuffle() {
         const startIndex = (dayOfYear * itemsPerPage) % baseList.length;
         baseList = baseList.slice(startIndex, startIndex + itemsPerPage);
         
-        // 20個の小グループ内をさらにシャッフルして出題
         baseList.sort(() => Math.random() - 0.5);
     }
     
@@ -581,7 +660,6 @@ function processChantStep() {
         return; 
     }
     
-    // インデックスの安全な丸め（範囲外エラー防止）
     if (wordIndex >= currentPlaylist.length || wordIndex < 0) {
         wordIndex = 0;
     }
@@ -623,12 +701,10 @@ function processChantStep() {
         case 2: 
             speak(cleanTextForTTS(currentVocab.word, currentVocab.meaning), 'en-US');
             step = 3; 
-            // タイピング待ち(Step 3)に入るため、ここで一旦自動進行のタイマーを止めます
             if (timerId) clearInterval(timerId); 
             renderTypingWord(); 
             break;
         case 3:
-            // スコア・コンボの計算とリベンジDbの処理
             if (isCurrentWordCleared) {
                 gameScore += 10 + Math.floor(gameCombo / 5);
                 gameCombo += 1;
@@ -644,7 +720,6 @@ function processChantStep() {
             if (scoreVal) scoreVal.innerText = gameScore;
             if (comboVal) comboVal.innerText = gameCombo;
 
-            // リベンジ時のインデックス処理
             if (activeCategory === 'revenge') {
                 applyFilterAndShuffle();
                 if(currentPlaylist.length === 0) {
@@ -657,7 +732,6 @@ function processChantStep() {
                 }
                 wordIndex = 0;
             } else {
-                // 通常モードは次の単語へ
                 wordIndex = (wordIndex + 1) % currentPlaylist.length;
             }
 
@@ -671,7 +745,6 @@ function processChantStep() {
 function handleTypingInput(e) {
     if (isPaused) return; 
 
-    // スペースキーやEnterキーでのスクロールや誤動作を防止
     if (e.key === ' ' || e.key === 'Enter') {
         if (isPlaying) {
             e.preventDefault();
@@ -694,15 +767,13 @@ function handleTypingInput(e) {
             renderTypingWord();
 
             if (typedIndex >= targetString.length) {
-                // すべて正しく打ち終えた！
                 isCurrentWordCleared = true;
                 playWordCompleteSound(); 
                 renderTypingWord();
                 
-                // ★Enterを待たずに、即座に次の問題への移行処理(Case 3)を実行！
                 setTimeout(() => {
                     processChantStep();
-                }, 400); // 0.4秒だけ打ち終わりの余韻(効果音)を残して次へ進む
+                }, 400); 
             } else {
                 playKeySuccessSound();   
             }
@@ -739,7 +810,6 @@ function cleanTextForTTS(rawText, rawMeaning) {
 
 function speak(text, lang) {
     if (isPaused) return;
-    // 前の音声をクリアしつつ、連続で詰まらないように制御
     window.speechSynthesis.cancel(); 
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = lang;
@@ -761,7 +831,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // シャッフルボタン
     if (shuffleBtn) {
         shuffleBtn.addEventListener('click', (e) => {
             toggleShuffle();
@@ -769,7 +838,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // スタート / 一時停止 ボタン
     if (actionBtn) {
         actionBtn.addEventListener('click', (e) => {
             toggleApp();
@@ -777,7 +845,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // ストップボタン
     if (stopBtn) {
         stopBtn.addEventListener('click', (e) => {
             stopLoop();
@@ -785,7 +852,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // 覚えたボタン
     const masterBtn = document.getElementById('master-btn');
     if (masterBtn) {
         masterBtn.addEventListener('click', (e) => {
@@ -794,7 +860,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // 初期化ボタン
     const resetBtn = document.getElementById('reset-btn');
     if (resetBtn) {
         resetBtn.addEventListener('click', (e) => {
@@ -803,7 +868,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // 単語追加ボタン
     const addWordBtn = document.getElementById('add-word-btn');
     if (addWordBtn) {
         addWordBtn.addEventListener('click', (e) => {
@@ -812,98 +876,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // 💡 順番を完全に保護：すべての準備が整ってから初期データを流し込む
     loadSavedData();
-    setupDurationSelect(); // 👈 ここで「∞ 無制限」をHTMLに強制合流させています！
+    setupDurationSelect(); 
     applyFilterAndShuffle();
-});// 💡 ここでDOMContentLoadedのイベントリスナーを閉じる
-// --- ✨ 新しく追加する関数（リスト表示＆修正ロジック） ---
-
-function renderCustomVocabList(customWords) {
-    const listContainer = document.getElementById('custom-vocab-list');
-    if (!listContainer) return;
-
-    if (customWords.length === 0) {
-        listContainer.innerHTML = `<p style="color: #94a3b8; text-align: center; margin: 0;">登録された自作単語はまだありません</p>`;
-        return;
-    }
-
-    let html = `<p style="font-weight: bold; margin: 0 0 8px 0; color: #475569;">📝 登録ずみの単語（クリックで修正・削除）</p>`;
-    
-    // 登録した順（新しいものが上）に並べる
-    const reversedWords = [...customWords].reverse();
-
-    reversedWords.forEach(item => {
-        html += `
-            <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px dashed #e2e8f0;">
-                <div style="flex: 1; min-width: 0; padding-right: 8px;">
-                    <strong style="color: var(--primary-color); word-break: break-all;">${item.word}</strong> 
-                    <span style="color: #64748b; font-size: 0.75rem; block; word-break: break-all;">: ${item.meaning}</span>
-                </div>
-                <div style="display: flex; gap: 4px; flex-shrink: 0;">
-                    <button type="button" onclick="editCustomWord(${item.id})" style="background: #e0f2fe; color: #0369a1; border: none; padding: 2px 6px; border-radius: 4px; cursor: pointer; font-size: 0.75rem;">✏️直す</button>
-                    <button type="button" onclick="deleteCustomWord(${item.id})" style="background: #fee2e2; color: #b91c1c; border: none; padding: 2px 6px; border-radius: 4px; cursor: pointer; font-size: 0.75rem;">❌消す</button>
-                </div>
-            </div>
-        `;
-    });
-
-    listContainer.innerHTML = html;
-}
-
-// ✏️ 単語を修正する機能
-window.editCustomWord = function(id) {
-    if (isPlaying) {
-        alert("ゲーム中は単語の修正ができません。一度ストップしてください。");
-        return;
-    }
-    
-    const savedCustomWords = localStorage.getItem('eiken4_customWords');
-    if (!savedCustomWords) return;
-    let customList = JSON.parse(savedCustomWords);
-    
-    const targetItem = customList.find(item => item.id === id);
-    if (!targetItem) return;
-
-    // ポップアップで新しい入力を求める
-    const newWord = prompt("【英単語の修正】", targetItem.word);
-    if (newWord === null) return; // キャンセルされたら何もしない
-    
-    const newMeaning = prompt("【日本語の意味の修正】", targetItem.meaning);
-    if (newMeaning === null) return;
-
-    if (newWord.trim() === "" || newMeaning.trim() === "") {
-        alert("文字が空っぽのままで保存はできません。");
-        return;
-    }
-
-    // データを書き換える
-    targetItem.word = newWord.trim().toLowerCase();
-    targetItem.meaning = newMeaning.trim();
-
-    localStorage.setItem('eiken4_customWords', JSON.stringify(customList));
-    loadSavedData(); // 画面を再読込
-    if (activeCategory === 'custom' || activeCategory === 'all') applyFilterAndShuffle();
-    alert("単語を修正しました！");
-};
-
-// ❌ 単語を削除する機能
-window.deleteCustomWord = function(id) {
-    if (isPlaying) {
-        alert("ゲーム中は単語の削除ができません。一度ストップしてください。");
-        return;
-    }
-    
-    if (!confirm("この単語を削除してもよろしいですか？")) return;
-
-    const savedCustomWords = localStorage.getItem('eiken4_customWords');
-    if (!savedCustomWords) return;
-    let customList = JSON.parse(savedCustomWords);
-
-    // 指定されたID以外の単語だけ残す
-    customList = customList.filter(item => item.id !== id);
-
-    localStorage.setItem('eiken4_customWords', JSON.stringify(customList));
-    loadSavedData(); // 画面を再読込
-    if (activeCategory === 'custom' || activeCategory === 'all') applyFilterAndShuffle();
-};
 });
