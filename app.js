@@ -813,9 +813,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     loadSavedData();
-    setupDurationSelect(); 
+    setupDurationSelect(); // 👈 ここで「∞ 無制限」をHTMLに強制合流させています！
     applyFilterAndShuffle();
-});
+});// 💡 ここでDOMContentLoadedのイベントリスナーを閉じる
 // --- ✨ 新しく追加する関数（リスト表示＆修正ロジック） ---
 
 function renderCustomVocabList(customWords) {
