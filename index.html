@@ -36,7 +36,7 @@
         <button type="button" class="nav-btn btn-3kyu btn-idiom" data-category="idiom3">③級 熟語特訓</button>
         
         <button type="button" class="nav-btn" id="revenge-tab-btn" style="display:none; background-color:#ffe2e2; border: 2px solid var(--error-color); color: var(--error-color); grid-column: span 3;" data-category="revenge">🔥 リベンジモード</button>
-        </div>
+    </div>
 
     <div class="shuffle-panel">
         <button type="button" id="shuffle-btn" class="shuffle-btn">🔀 シャッフル：OFF</button>
@@ -67,17 +67,14 @@
         <button type="button" id="add-word-btn" class="add-word-btn">単語を追加保存する</button>
         
         <button type="button" class="nav-btn" style="width: 100%; margin-top: 8px; background-color: #fff5f8; border: 1px solid var(--shuffle-color); color: #7d6b8d;" data-category="custom">📥 自作カスタム単語をれんしゅうする</button>
+
+        <div id="custom-vocab-list" style="margin-top: 15px; max-height: 200px; overflow-y: auto; background: #fff; padding: 10px; border-radius: 8px; border: 1px solid #e2e8f0; font-size: 0.85rem;">
+            </div>
     </div>
 
     <div class="controls">
         BGM Volume: <input type="range" id="volume" min="0" max="0.5" step="0.05" value="0.2">
     </div>
-    <!-- 🛠️ ここから追記：登録した自作単語の一覧と修正ボタンが表示されるエリア -->
-        <div id="custom-vocab-list" style="margin-top: 15px; max-height: 200px; overflow-y: auto; background: #fff; padding: 10px; border-radius: 8px; border: 1px solid #e2e8f0; font-size: 0.85rem;">
-            <!-- ここに登録された単語が自動で並びます -->
-        </div>
-        <!-- 🛠️ ここまで追記 -->
-    </div> <!-- custom-entry-boxの閉じタグ -->
 </div>
 
 <audio id="bg-track-how" loop src="キラキラアイドル.mp3" style="display:none;"></audio>
@@ -90,4 +87,3 @@
 <script src="app.js"></script>
 </body>
 </html>
-
