@@ -86,9 +86,32 @@ function handleTypingInput(e) {
     const ignoreKeys = ['Shift', 'CapsLock', 'Control', 'Alt', 'Enter', 'Tab', 'Escape'];
     if (ignoreKeys.includes(e.key)) return;
 
-    // ゲームロジック処理
-    // ※元のロジックをここに維持
-    // 成功時: setTimeout(() => processChantStep(), 400); 
+    // 入力が完了している場合は無視
+    if (targetString === "" || isCurrentWordCleared) return;
+
+    // タイピング判定ロジック
+    if (e.key.toLowerCase() === targetString[typedIndex].toLowerCase()) {
+        typedIndex++;
+        hasError = false;
+        renderTypingWord(); // 画面を更新
+
+        // 最後まで入力できたら次へ
+        if (typedIndex >= targetString.length) {
+            isCurrentWordCleared = true;
+            playWordCompleteSound();
+            
+            // 400ms待ってから次のステップへ
+            setTimeout(() => {
+                if (gameState === 'PLAYING') {
+                    processChantStep();
+                }
+            }, 400);
+        }
+    } else {
+        // 間違えた場合
+        hasError = true;
+        renderTypingWord();
+    }
 }
 
 // --- 📝 ボタン操作制御 ---
