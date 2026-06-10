@@ -83,8 +83,8 @@ function renderCustomVocabList(customWords) {
                     <span style="color: #64748b; font-size: 0.75rem; block; word-break: break-all;">: ${item.meaning}</span>
                 </div>
                 <div style="display: flex; gap: 4px; flex-shrink: 0;">
-                    <button type="button" onclick="editCustomWord(${item.id})" style="background: #e0f2fe; color: #0369a1; border: none; padding: 2px 6px; border-radius: 4px; cursor: pointer; font-siz[...]
-                    <button type="button" onclick="deleteCustomWord(${item.id})" style="background: #fee2e2; color: #b91c1c; border: none; padding: 2px 6px; border-radius: 4px; cursor: pointer; font-s[...]
+                    <button type="button" onclick="editCustomWord(${item.id})" style="background: #e0f2fe; color: #0369a1; border: none; padding: 2px 6px; border-radius: 4px; cursor: pointer; font[...]
+                    <button type="button" onclick="deleteCustomWord(${item.id})" style="background: #fee2e2; color: #b91c1c; border: none; padding: 2px 6px; border-radius: 4px; cursor: pointer; fo[...]
                 </div>
             </div>
         `;
@@ -371,12 +371,14 @@ function applyFilterAndShuffle() {
         baseList = baseList.filter(item => item.tag === activeCategory);
     }
 
+    // ★ 修正：シャッフルONの時だけランダム化、OFFの時はそのまま
     if (isShuffleOn) {
         for (let i = baseList.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [baseList[i], baseList[j]] = [baseList[j], baseList[i]];
         }
     }
+    // シャッフルOFFの場合、ここでランダム化しない
 
     if (baseList.length > 0) {
         const today = new Date();
@@ -389,7 +391,8 @@ function applyFilterAndShuffle() {
         const startIndex = (dayOfYear * itemsPerPage) % baseList.length;
         baseList = baseList.slice(startIndex, startIndex + itemsPerPage);
         
-        baseList.sort(() => Math.random() - 0.5);
+        // ★ 削除：この行は常にランダム化していたので削除
+        // baseList.sort(() => Math.random() - 0.5);
     }
     
     currentPlaylist = [...baseList];
@@ -418,15 +421,23 @@ function switchCategory(categoryTag, element) {
 }
 
 function toggleShuffle() {
-    // 修正: ゲーム中でもシャッフルON/OFF切り替え可能に
     isShuffleOn = !isShuffleOn;
     if (shuffleBtn) {
         shuffleBtn.innerText = isShuffleOn ? "🔀 シャッフル：ON" : "🔀 シャッフル：OFF";
         shuffleBtn.classList.toggle('active', isShuffleOn);
     }
-    // ゲーム中でなければプレイリストを更新
-    if (!isPlaying) {
-        applyFilterAndShuffle();
+    
+    // ★ ゲーム中・停止中どちらでも即座にプレイリスト更新
+    applyFilterAndShuffle();
+    
+    // ゲーム中なら最初から再開
+    if (isPlaying) {
+        wordIndex = 0;
+        step = 0;
+        isProcessingStep = false;
+        if (timerId) clearInterval(timerId);
+        resetBeatTimer();
+        processChantStep();
     }
 }
 
@@ -552,7 +563,7 @@ function startLoop() {
     }
     if (stopBtn) stopBtn.style.display = "block"; 
     
-    // 修正1: BGMをより確実に開始
+    // 修正：BGMをより確実に開始
     console.log('startLoop開始, activeCategory:', activeCategory);
     setTimeout(() => {
         if (activeCategory === 'all') {
@@ -763,6 +774,7 @@ function processChantStep() {
             step = 0;
             isProcessingStep = false;
             resetBeatTimer();
+            processChantStep();
             break;
     }
 }
