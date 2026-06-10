@@ -77,96 +77,12 @@
     </div>
 </div>
 
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Eiken Rhythmic Typing Challenge Pro</title>
-    <link rel="stylesheet" href="style.css">
-</head>
-<body>
-
-<div class="container">
-    <div id="combo-popup" class="combo-popup">5問連続正解！</div>
-
-    <div class="timer-select-box" id="timer-setup-panel">
-        ⏱️ れんしゅう時間：
-        <select id="game-duration-select">
-            <option value="5">5分間ゲーム</option>
-            <option value="10">10分間ゲーム</option>
-            <option value="15" selected>15分間ゲーム</option>
-        </select>
-    </div>
-
-    <div class="timer-display" id="time-left-display" style="display:none;">⏱️ 残り時間: --:--</div>
-
-    <div class="category-menu">
-        <button type="button" class="nav-btn active" data-category="all">全て</button>
-        <button type="button" class="nav-btn" data-category="how">4級 How</button>
-        <button type="button" class="nav-btn" data-category="verbs">4級 動詞</button>
-        <button type="button" class="nav-btn" data-category="adj">4級 形容詞</button>
-        <button type="button" class="nav-btn" data-category="noun">4級 名詞</button>
-        <button type="button" class="nav-btn" data-category="prep">4級 前置詞</button>
-        
-        <button type="button" class="nav-btn btn-3kyu" data-category="verbs3">③級 動詞</button>
-        <button type="button" class="nav-btn btn-3kyu" data-category="adj3">③級 形容詞</button>
-        <button type="button" class="nav-btn btn-3kyu" data-category="noun3">③級 名詞</button>
-        <button type="button" class="nav-btn btn-3kyu btn-idiom" data-category="idiom3">③級 熟語特訓</button>
-        
-        <button type="button" class="nav-btn" id="revenge-tab-btn" style="display:none; background-color:#ffe2e2; border: 2px solid var(--error-color); color: var(--error-color); grid-column: span 3;" data-category="revenge">🔥 リベンジモード</button>
-    </div>
-
-    <div class="shuffle-panel">
-        <button type="button" id="shuffle-btn" class="shuffle-btn">🔀 シャッフル：OFF</button>
-    </div>
-
-    <div id="word-display">Ready?</div>
-    <div id="meaning-display">Press Start</div>
+<audio id="bg-track-how" loop src="kirakira.mp3"></audio>
+<audio id="bg-track-verbs" loop src="pop_swing.mp3"></audio>
+<audio id="bg-track-adj" loop src="snack_time.mp3"></audio>
+<audio id="bg-track-noun" loop src="kawaii.mp3"></audio>
+<audio id="bg-track-idiom" loop src="watagumo.mp3"></audio>
     
-    <button type="button" id="action-btn" class="main-action">START GAME</button>
-    <button type="button" id="stop-btn" class="main-action" style="background-color: #64748b; margin-top: 10px; display: none;">LESSON STOP</button>
-    
-    <div class="score-banner">
-        <div>⭐ Score: <span id="score-val">0</span></div>
-        <div>🎯 Combo: <span id="combo-val">0</span></div>
-    </div>
-
-    <div class="mastery-panel">
-        <button type="button" id="master-btn" class="mastery-btn" style="background-color: var(--success-color); color: #155e75;">💖 覚えた！隠す</button>
-        <button type="button" id="reset-btn" class="mastery-btn" style="background-color: #fee2e2; color: #991b1b; font-size:0.75rem;">🔄 全初期化</button>
-    </div>
-
-    <div class="custom-entry-box">
-        <h3>✨ 自分でオリジナル単語を追加</h3>
-        <div class="input-group">
-            <input type="text" id="custom-word" placeholder="例: play → played">
-            <input type="text" id="custom-meaning" placeholder="例: 遊ぶ → 遊んだ">
-        </div>
-        <button type="button" id="add-word-btn" class="add-word-btn">単語を追加保存する</button>
-        
-        <button type="button" class="nav-btn" style="width: 100%; margin-top: 8px; background-color: #fff5f8; border: 1px solid var(--shuffle-color); color: #7d6b8d;" data-category="custom">📥 自作カスタム単語をれんしゅうする</button>
-
-        <div id="custom-vocab-list" style="margin-top: 15px; max-height: 200px; overflow-y: auto; background: #fff; padding: 10px; border-radius: 8px; border: 1px solid #e2e8f0; font-size: 0.85rem;">
-            </div>
-    </div>
-
-    <div class="controls">
-        BGM Volume: <input type="range" id="volume" min="0" max="0.5" step="0.05" value="0.2">
-    </div>
-</div>
-
-<audio id="bg-track-how" loop src="./BGM/kirakira.mp3"></audio>
-<audio id="bg-track-verbs" loop src="./BGM/pop_swing.mp3"></audio>
-<audio id="bg-track-adj" loop src="./BGM/snack_time.mp3"></audio>
-<audio id="bg-track-noun" loop src="./BGM/kawaii.mp3"></audio>
-<audio id="bg-track-idiom" loop src="./BGM/watagumo.mp3"></audio>
-    
-<script src="vocab.js"></script>
-<script src="app.js"></script>
-</body>
-</html>
-
 <script src="vocab.js"></script>
 <script src="app.js"></script>
 </body>
