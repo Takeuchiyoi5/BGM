@@ -83,8 +83,8 @@ function renderCustomVocabList(customWords) {
                     <span style="color: #64748b; font-size: 0.75rem; block; word-break: break-all;">: ${item.meaning}</span>
                 </div>
                 <div style="display: flex; gap: 4px; flex-shrink: 0;">
-                    <button type="button" onclick="editCustomWord(${item.id})" style="background: #e0f2fe; color: #0369a1; border: none; padding: 2px 6px; border-radius: 4px; cursor: pointer; font-size: 0.75rem;">✏️直す</button>
-                    <button type="button" onclick="deleteCustomWord(${item.id})" style="background: #fee2e2; color: #b91c1c; border: none; padding: 2px 6px; border-radius: 4px; cursor: pointer; font-size: 0.75rem;">❌消す</button>
+                    <button type="button" onclick="editCustomWord(${item.id})" style="background: #e0f2fe; color: #0369a1; border: none; padding: 2px 6px; border-radius: 4px; cursor: pointer; font-siz[...]
+                    <button type="button" onclick="deleteCustomWord(${item.id})" style="background: #fee2e2; color: #b91c1c; border: none; padding: 2px 6px; border-radius: 4px; cursor: pointer; font-s[...]
                 </div>
             </div>
         `;
@@ -167,6 +167,9 @@ function getTrackForCategory(category) {
     if (category === 'verbs' || category === 'verbs3') return bgTracks.verbs;
     if (category === 'adj' || category === 'adj3') return bgTracks.adj;
     if (category === 'noun' || category === 'noun3') return bgTracks.noun;
+    if (category === 'idiom') return bgTracks.idiom;
+    if (category === 'custom') return bgTracks.how; // カスタム単語用のデフォルトBGM
+    if (category === 'all') return bgTracks.how; // allカテゴリーのデフォルト（通常は startAllModeBgmCycle が使われる）
     return bgTracks.idiom; 
 }
 
@@ -530,10 +533,14 @@ function startLoop() {
     }
     if (stopBtn) stopBtn.style.display = "block"; 
     
+    // 修正1: allカテゴリーでなくても常にBGMを開始
     if (activeCategory === 'all') {
         startAllModeBgmCycle();
     } else {
-        fadeTransitionTo(getTrackForCategory(activeCategory));
+        const track = getTrackForCategory(activeCategory);
+        if (track) {
+            fadeTransitionTo(track);
+        }
     }
     
     step = 0;
@@ -609,7 +616,8 @@ function stopLoop() {
 
 function resetBeatTimer() {
     if (timerId) clearInterval(timerId);
-    if (step === 3 || isPaused) return; 
+    // 修正2: step === 3 の時でもタイマーを設定できるように条件を変更
+    if (isPaused) return; 
     timerId = setInterval(processChantStep, beatInterval);
 }
 
@@ -699,6 +707,7 @@ function processChantStep() {
             step = 3;
             renderTypingWord();
             isProcessingStep = false;
+            resetBeatTimer();
             break;
         case 3:
             if (isCurrentWordCleared) {
@@ -733,7 +742,6 @@ function processChantStep() {
             step = 0;
             isProcessingStep = false;
             resetBeatTimer();
-            processChantStep();
             break;
     }
 }
@@ -767,8 +775,11 @@ function handleTypingInput(e) {
                 playWordCompleteSound(); 
                 renderTypingWord();
                 
+                // 修正3: setTimeout で遅延した後、processChantStep を呼び出し
                 setTimeout(() => {
-                    processChantStep();
+                    if (isPlaying && !isPaused) {
+                        processChantStep();
+                    }
                 }, 400); 
             } else {
                 playKeySuccessSound();   
