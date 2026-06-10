@@ -174,6 +174,8 @@ function getTrackForCategory(category) {
 }
 
 function fadeTransitionTo(newTrack) {
+    console.log('切替先BGM:', newTrack?.src);
+  
     if (!newTrack) {
         console.warn('fadeTransitionTo: newTrack is null or undefined');
         return;
@@ -203,13 +205,21 @@ function fadeTransitionTo(newTrack) {
     if (isPlaying && !isPaused) {
         currentAudioEl.volume = 0;
         if (currentAudioEl.paused) {
+
+            currentAudioEl.load();      // ←追加
+        
             currentAudioEl.currentTime = 0;
+        
             currentAudioEl.play()
                 .then(() => {
                     console.log('BGM再生開始:', currentAudioEl.src);
                 })
                 .catch(e => {
-                    console.error('BGM再生がブロックされました:', e);
+                    console.error('BGM再生失敗');
+                    console.error('src=', currentAudioEl.src);
+                    console.error('readyState=', currentAudioEl.readyState);
+                    console.error('networkState=', currentAudioEl.networkState);
+                    console.error(e);
                 });
         }
 
