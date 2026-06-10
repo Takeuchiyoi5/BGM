@@ -168,13 +168,16 @@ function getTrackForCategory(category) {
     if (category === 'adj' || category === 'adj3') return bgTracks.adj;
     if (category === 'noun' || category === 'noun3') return bgTracks.noun;
     if (category === 'idiom') return bgTracks.idiom;
-    if (category === 'custom') return bgTracks.how; // カスタム単語用のデフォルトBGM
-    if (category === 'all') return bgTracks.how; // allカテゴリーのデフォルト（通常は startAllModeBgmCycle が使われる）
+    if (category === 'custom') return bgTracks.how;
+    if (category === 'all') return bgTracks.how;
     return bgTracks.idiom; 
 }
 
 function fadeTransitionTo(newTrack) {
-    if (!newTrack) return;
+    if (!newTrack) {
+        console.warn('fadeTransitionTo: newTrack is null or undefined');
+        return;
+    }
     const targetVol = volumeSlider ? parseFloat(volumeSlider.value) : 0.2;
     const fadeDuration = 1000; 
     const steps = 10;
@@ -201,7 +204,13 @@ function fadeTransitionTo(newTrack) {
         currentAudioEl.volume = 0;
         if (currentAudioEl.paused) {
             currentAudioEl.currentTime = 0;
-            currentAudioEl.play().catch(e => console.log("BGM再生がブロックされました"));
+            currentAudioEl.play()
+                .then(() => {
+                    console.log('BGM再生開始:', currentAudioEl.src);
+                })
+                .catch(e => {
+                    console.error('BGM再生がブロックされました:', e);
+                });
         }
 
         let inStep = 0;
@@ -213,6 +222,7 @@ function fadeTransitionTo(newTrack) {
             }
             if (inStep >= steps) {
                 clearInterval(fadeInId);
+                console.log('BGMフェードイン完了, 音量:', currentAudioEl.volume);
             }
         }, interval);
     }
@@ -220,13 +230,18 @@ function fadeTransitionTo(newTrack) {
 
 function startAllModeBgmCycle() {
     if (allModeTimerId) clearInterval(allModeTimerId);
-    if (allModePlaylist.length === 0) return;
+    if (allModePlaylist.length === 0) {
+        console.warn('allModePlaylist is empty');
+        return;
+    }
     allModeTrackIndex = 0;
+    console.log('allModePlaylist開始, トラック数:', allModePlaylist.length);
     fadeTransitionTo(allModePlaylist[allModeTrackIndex]);
 
     allModeTimerId = setInterval(() => {
         if (!isPlaying || isPaused) return;
         allModeTrackIndex = (allModeTrackIndex + 1) % allModePlaylist.length;
+        console.log('BGMを次のトラックに切り替え:', allModeTrackIndex);
         fadeTransitionTo(allModePlaylist[allModeTrackIndex]);
     }, 120000);
 }
@@ -403,12 +418,16 @@ function switchCategory(categoryTag, element) {
 }
 
 function toggleShuffle() {
+    // 修正: ゲーム中でもシャッフルON/OFF切り替え可能に
     isShuffleOn = !isShuffleOn;
     if (shuffleBtn) {
         shuffleBtn.innerText = isShuffleOn ? "🔀 シャッフル：ON" : "🔀 シャッフル：OFF";
         shuffleBtn.classList.toggle('active', isShuffleOn);
     }
-    applyFilterAndShuffle();
+    // ゲーム中でなければプレイリストを更新
+    if (!isPlaying) {
+        applyFilterAndShuffle();
+    }
 }
 
 function markAsMastered() {
@@ -533,15 +552,20 @@ function startLoop() {
     }
     if (stopBtn) stopBtn.style.display = "block"; 
     
-    // 修正1: allカテゴリーでなくても常にBGMを開始
-    if (activeCategory === 'all') {
-        startAllModeBgmCycle();
-    } else {
-        const track = getTrackForCategory(activeCategory);
-        if (track) {
-            fadeTransitionTo(track);
+    // 修正1: BGMをより確実に開始
+    console.log('startLoop開始, activeCategory:', activeCategory);
+    setTimeout(() => {
+        if (activeCategory === 'all') {
+            console.log('allModePlaylist開始');
+            startAllModeBgmCycle();
+        } else {
+            const track = getTrackForCategory(activeCategory);
+            console.log('track取得:', track ? '成功' : '失敗', 'category:', activeCategory);
+            if (track) {
+                fadeTransitionTo(track);
+            }
         }
-    }
+    }, 100);
     
     step = 0;
     wordIndex = 0; 
@@ -616,7 +640,6 @@ function stopLoop() {
 
 function resetBeatTimer() {
     if (timerId) clearInterval(timerId);
-    // 修正2: step === 3 の時でもタイマーを設定できるように条件を変更
     if (isPaused) return; 
     timerId = setInterval(processChantStep, beatInterval);
 }
@@ -667,7 +690,6 @@ function triggerComboPopup(comboCount) {
 function processChantStep() {
     if (isPaused || isProcessingStep) return;
     
-    // 安全のため、進行中にタイマーを一度クリア
     if (timerId) clearInterval(timerId);
 
     if (!currentPlaylist || currentPlaylist.length === 0) {
@@ -675,7 +697,6 @@ function processChantStep() {
         return;
     }
 
-    // 次のステップへ行く際に一度フラグを立てる
     isProcessingStep = true;
 
     if (wordIndex >= currentPlaylist.length || wordIndex < 0) wordIndex = 0;
@@ -692,7 +713,7 @@ function processChantStep() {
             if (meaningDisplay) meaningDisplay.innerText = "---";
             speak(cleanTextForTTS(currentVocab.word, currentVocab.meaning), 'en-US');
             step = 1;
-            isProcessingStep = false; // フラグ解除
+            isProcessingStep = false;
             resetBeatTimer();
             break;
         case 1:
@@ -775,7 +796,6 @@ function handleTypingInput(e) {
                 playWordCompleteSound(); 
                 renderTypingWord();
                 
-                // 修正3: setTimeout で遅延した後、processChantStep を呼び出し
                 setTimeout(() => {
                     if (isPlaying && !isPaused) {
                         processChantStep();
@@ -883,7 +903,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // 💡 順番を完全に保護：すべての準備が整ってから初期データを流し込む
     loadSavedData();
     setupDurationSelect(); 
     applyFilterAndShuffle();
